@@ -3,4 +3,12 @@ gunicorn==23.0.0
 Werkzeug==3.0.3
 requests==2.32.3
 python-dotenv==1.0.1
-psycopg2-binary==2.9.9   # only needed if using Supabase/Postgres
+
+# Database / Supabase
+psycopg2-binary==2.9.9
+supabase==2.3.4   # (latest stable Python client for Supabase)
+
+# APIs
+openai==1.40.0
+paystackapi==2.1.0
+coinbase-commerce==1.0.1
