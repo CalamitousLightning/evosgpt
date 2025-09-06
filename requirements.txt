@@ -5,10 +5,11 @@ requests==2.32.3
 python-dotenv==1.0.1
 
 # Database / Supabase
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.10
 supabase==2.3.4   # (latest stable Python client for Supabase)
 
 # APIs
 openai==1.40.0
 paystackapi==2.1.0
 coinbase-commerce==1.0.1
+
