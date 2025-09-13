@@ -196,13 +196,19 @@
       border-bottom-left-radius: 0;
       border: 1px solid var(--border-color);
     }
-    #chat-form {
-      display: flex;
-      padding: 10px;
-      background: var(--chat-bot-bg);
-      border-top: 1px solid var(--border-color);
-    }
-    #message {
+ #chat-form {
+  display: flex;
+  padding: 10px;
+  background: var(--chat-bot-bg);
+  border-top: 1px solid var(--border-color);
+
+  /* ✅ Keep input visible on mobile */
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+   #message {
       flex: 1;
       padding: 12px;
       border: 1px solid var(--border-color);
