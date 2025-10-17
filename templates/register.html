@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Register - EVOSGPT</title>
   <style>
     :root {
@@ -11,15 +11,14 @@
       --primary-color: #00d4ff;
       --card-bg: #fff;
       --border-color: #ccc;
+      --accent: #ff9800;
     }
     [data-theme="dark"] {
       --bg-color: #121212;
       --text-color: #f5f5f5;
-      --primary-color: #00d4ff;
       --card-bg: #1f1f1f;
       --border-color: #333;
     }
-
     body {
       font-family: Arial, sans-serif;
       background: var(--bg-color);
@@ -30,7 +29,6 @@
       min-height: 100vh;
       margin: 0;
     }
-
     .form-box {
       width: 100%;
       max-width: 400px;
@@ -39,13 +37,11 @@
       border-radius: 12px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.15);
     }
-
     h2 {
       text-align: center;
       margin-bottom: 20px;
       color: var(--primary-color);
     }
-
     input, button {
       width: 100%;
       padding: 12px;
@@ -54,12 +50,10 @@
       border: 1px solid var(--border-color);
       font-size: 14px;
     }
-
     input {
       background: var(--card-bg);
       color: var(--text-color);
     }
-
     button {
       background: var(--primary-color);
       color: #fff;
@@ -68,21 +62,19 @@
       cursor: pointer;
       transition: 0.2s;
     }
-    button:hover {
-      background: #00bde0;
+    button:hover { background: #00bde0; }
+    .terms-box {
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      margin-top: 8px;
     }
-
-    p {
-      text-align: center;
-      font-size: 14px;
-      margin-top: 15px;
+    .terms-box input { width: auto; margin-right: 6px; }
+    .terms-box a {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline;
     }
-    p a {
-      color: var(--primary-color);
-      text-decoration: none;
-      font-weight: bold;
-    }
-
     .msg {
       margin: 10px 0;
       padding: 10px;
@@ -92,47 +84,125 @@
     }
     .msg.error { background: #ffebee; color: #c62828; }
     .msg.success { background: #e8f5e9; color: #2e7d32; }
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: var(--card-bg);
+      color: var(--text-color);
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      position: relative;
+    }
+    .close {
+      position: absolute;
+      right: 15px;
+      top: 10px;
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--accent);
+    }
+    .modal h3 {
+      color: var(--primary-color);
+      margin-top: 0;
+    }
+    .agree-btn {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      padding: 10px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
-
-
   <div class="form-box">
     <h2>Create Account</h2>
-    <form method="POST">
-      <input type="text" name="username" placeholder="Username" required>
-      <input type="text" name="email" placeholder="Email or Mobile" required>
-      <input type="password" name="password" placeholder="Password" required>
-      <input type="password" name="confirm_password" placeholder="Confirm Password" required>
-      <input type="text" name="referral_code" placeholder="Referral Code (optional)">
+    <form method="POST" id="registerForm">
+      <input type="text" name="username" placeholder="Username" required />
+      <input type="text" name="email" placeholder="Email or Mobile" required />
+      <input type="password" name="password" placeholder="Password" required />
+      <input type="password" name="confirm_password" placeholder="Confirm Password" required />
+      <input type="text" name="referral_code" placeholder="Referral Code (optional)" />
+
+      <div class="terms-box">
+        <input type="checkbox" id="agree_terms" name="agree_terms" />
+        <label for="agree_terms">
+          I agree to the <a id="openTerms">Terms of Service</a> & <a id="openPrivacy">Privacy Policy</a>
+        </label>
+      </div>
+
       <button type="submit">Register</button>
     </form>
-  <div>
-  {% with messages = get_flashed_messages() %}
-  {% if messages %}
-    <ul style="color:red; font-weight:bold;">
-      {% for msg in messages %}
-        <li>{{ msg }}</li>
-      {% endfor %}
-    </ul>
-  {% endif %}
-{% endwith %}
-</div>
+
     {% if msg %}
       <div class="msg {{ msg_type }}">{{ msg }}</div>
     {% endif %}
-
     <p>Already have an account? <a href="/login">Login here</a></p>
   </div>
 
+  <!-- Modal -->
+  <div id="termsModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeModal">&times;</span>
+      <h3>EVOSGPT Terms of Service & Privacy Policy</h3>
+      <p><strong>1. Usage:</strong> You agree to use EVOSGPT responsibly. No spam, abuse, or illegal activity.</p>
+      <p><strong>2. Data:</strong> Chats may be stored anonymously for AI improvement. Personal data is not shared.</p>
+      <p><strong>3. EVOSToken:</strong> Tokens are internal credits, non-transferable, and have no real-world value.</p>
+      <p><strong>4. Payments:</strong> Refunds only apply for failed paid-tier activations.</p>
+      <p><strong>5. Privacy:</strong> Your account data is encrypted and not sold to third parties.</p>
+      <p><strong>6. Acknowledgment:</strong> Continuing registration indicates acceptance of these terms.</p>
+      <button class="agree-btn" id="agreeClose">Agree & Close</button>
+    </div>
+  </div>
+
   <script>
-    // Apply saved theme or follow system
+    // Theme setup
     const savedTheme = localStorage.getItem("theme");
-    if (savedTheme) {
-      document.body.setAttribute("data-theme", savedTheme);
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    if (savedTheme) document.body.setAttribute("data-theme", savedTheme);
+    else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
       document.body.setAttribute("data-theme", "dark");
-    }
+
+    // Modal logic
+    const modal = document.getElementById("termsModal");
+    const openTerms = document.getElementById("openTerms");
+    const openPrivacy = document.getElementById("openPrivacy");
+    const closeModal = document.getElementById("closeModal");
+    const agreeClose = document.getElementById("agreeClose");
+
+    openTerms.onclick = openPrivacy.onclick = () => modal.style.display = "flex";
+    closeModal.onclick = () => modal.style.display = "none";
+    agreeClose.onclick = () => {
+      modal.style.display = "none";
+      document.getElementById("agree_terms").checked = true;
+    };
+    window.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
+
+    // Form validation
+    document.getElementById("registerForm").addEventListener("submit", (e) => {
+      const checkbox = document.getElementById("agree_terms");
+      if (!checkbox.checked) {
+        e.preventDefault();
+        alert("Please agree to the Terms & Privacy Policy before continuing.");
+      }
+    });
   </script>
 </body>
 </html>
