@@ -1,208 +1,321 @@
+<!-- path: templates/register.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Register - EVOSGPT</title>
   <style>
-    :root {
-      --bg-color: #f5f7fa;
-      --text-color: #333;
-      --primary-color: #00d4ff;
-      --card-bg: #fff;
-      --border-color: #ccc;
-      --accent: #ff9800;
+    :root{
+      --bg:#f5f7fa; --text:#222; --primary:#00d4ff; --accent:#ff9800; --card:#fff; --muted:#666;
+      --radius:12px;
     }
-    [data-theme="dark"] {
-      --bg-color: #121212;
-      --text-color: #f5f5f5;
-      --card-bg: #1f1f1f;
-      --border-color: #333;
+    [data-theme="dark"]{
+      --bg:#0f1112; --text:#f4f6f8; --card:#161616; --muted:#bbb;
     }
-    body {
-      font-family: Arial, sans-serif;
-      background: var(--bg-color);
-      color: var(--text-color);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      margin: 0;
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+      font-family:Inter, system-ui, Arial, sans-serif; background:var(--bg); color:var(--text);
     }
-    .form-box {
-      width: 100%;
-      max-width: 400px;
-      padding: 25px;
-      background: var(--card-bg);
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    .form-box{
+      width:100%; max-width:420px; padding:28px; background:var(--card); border-radius:var(--radius);
+      box-shadow:0 10px 30px rgba(0,0,0,0.08);
     }
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-      color: var(--primary-color);
+    h2{margin:0 0 16px; text-align:center; color:var(--primary)}
+    input, button, textarea, select{
+      width:100%; padding:12px 14px; border-radius:10px; border:1px solid #e3e6ea; font-size:14px;
+      margin:8px 0; background:transparent; color:var(--text);
     }
-    input, button {
-      width: 100%;
-      padding: 12px;
-      margin: 8px 0;
-      border-radius: 8px;
-      border: 1px solid var(--border-color);
-      font-size: 14px;
+    input:focus, textarea:focus{outline:2px solid rgba(0,212,255,0.15); border-color:var(--primary)}
+    button{
+      background:linear-gradient(90deg,var(--primary),#00b0d9); color:#fff; border:none; font-weight:600;
+      cursor:pointer; transition:transform .12s ease, box-shadow .12s ease;
     }
-    input {
-      background: var(--card-bg);
-      color: var(--text-color);
+    button:active{transform:translateY(1px)}
+    .muted{color:var(--muted); font-size:13px}
+    .terms-row{display:flex; align-items:flex-start; gap:8px; margin-top:8px; font-size:13px}
+    .terms-row a{color:var(--accent); text-decoration:underline; cursor:pointer}
+    .msg{margin-top:10px; padding:10px; border-radius:8px; font-size:14px; text-align:center}
+    .msg.error{background:#fff0f0;color:#b71c1c}
+    .msg.success{background:#f0fff3;color:#1b5e20}
+
+    /* Modal base */
+    .modal{display:none; position:fixed; inset:0; z-index:1200; align-items:center; justify-content:center;
+      background:rgba(0,0,0,0.5); padding:20px;}
+    .modal.show{display:flex}
+
+    /* Modal card responsive: center (desktop) / bottom-sheet (mobile) */
+    .modal-card{
+      width:100%; max-width:820px; background:var(--card); color:var(--text); border-radius:16px; overflow:hidden;
+      box-shadow:0 20px 60px rgba(0,0,0,0.35); transform:translateY(0); transition:transform .28s cubic-bezier(.2,.9,.2,1);
+      display:flex; flex-direction:column; max-height:86vh;
     }
-    button {
-      background: var(--primary-color);
-      color: #fff;
-      font-weight: bold;
-      border: none;
-      cursor: pointer;
-      transition: 0.2s;
+
+    /* Mobile bottom-sheet style */
+    @media (max-width:640px){
+      .modal{align-items:flex-end; padding:0}
+      .modal-card{border-bottom-left-radius:0; border-bottom-right-radius:0; max-height:92vh;
+        transform:translateY(30px);}
+      .modal.show .modal-card{transform:translateY(0)}
     }
-    button:hover { background: #00bde0; }
-    .terms-box {
-      display: flex;
-      align-items: center;
-      font-size: 13px;
-      margin-top: 8px;
-    }
-    .terms-box input { width: auto; margin-right: 6px; }
-    .terms-box a {
-      color: var(--accent);
-      cursor: pointer;
-      text-decoration: underline;
-    }
-    .msg {
-      margin: 10px 0;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 14px;
-      text-align: center;
-    }
-    .msg.error { background: #ffebee; color: #c62828; }
-    .msg.success { background: #e8f5e9; color: #2e7d32; }
-    /* Modal Styles */
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 9999;
-      left: 0; top: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.7);
-      justify-content: center;
-      align-items: center;
-    }
-    .modal-content {
-      background: var(--card-bg);
-      color: var(--text-color);
-      width: 90%;
-      max-width: 600px;
-      max-height: 80vh;
-      overflow-y: auto;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-      position: relative;
-    }
-    .close {
-      position: absolute;
-      right: 15px;
-      top: 10px;
-      cursor: pointer;
-      font-size: 20px;
-      font-weight: bold;
-      color: var(--accent);
-    }
-    .modal h3 {
-      color: var(--primary-color);
-      margin-top: 0;
-    }
-    .agree-btn {
-      background: var(--accent);
-      border: none;
-      color: #fff;
-      padding: 10px 15px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-weight: bold;
-      margin-top: 10px;
-    }
+
+    /* Modal header/tabs */
+    .modal-header{display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e9ecef}
+    .tabs{display:flex; gap:8px}
+    .tab{padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; color:var(--muted); background:transparent}
+    .tab.active{background:linear-gradient(90deg,var(--primary),#00b0d9); color:#fff}
+
+    .modal-body{display:flex; gap:24px; padding:18px}
+    .tab-content{flex:1; overflow:auto; max-height:64vh; padding-right:6px}
+    .content-section{display:none}
+    .content-section.active{display:block}
+
+    .modal-footer{display:flex; gap:12px; align-items:center; justify-content:flex-end; padding:12px 18px; border-top:1px solid #e9ecef}
+    .agree-btn{background:var(--accent); color:#fff; padding:10px 14px; border-radius:10px; border:none; cursor:pointer; font-weight:700}
+    .close-btn{background:transparent; color:var(--muted); border:1px solid transparent; padding:8px 12px; border-radius:8px; cursor:pointer}
+
+    /* scroll track small tweak */
+    .tab-content::-webkit-scrollbar{width:10px}
+    .tab-content::-webkit-scrollbar-thumb{background:#e5e7eb;border-radius:8px}
+    .legal-section p{margin:10px 0; line-height:1.45; font-size:14px}
+
+    /* small helpers */
+    .small-note{font-size:12px; color:var(--muted); margin-top:6px}
+    .flex-row{display:flex; gap:8px; align-items:center}
   </style>
 </head>
 <body>
-  <div class="form-box">
+  <div class="form-box" role="main">
     <h2>Create Account</h2>
-    <form method="POST" id="registerForm">
+
+    <form method="POST" id="registerForm" novalidate>
       <input type="text" name="username" placeholder="Username" required />
       <input type="text" name="email" placeholder="Email or Mobile" required />
       <input type="password" name="password" placeholder="Password" required />
       <input type="password" name="confirm_password" placeholder="Confirm Password" required />
       <input type="text" name="referral_code" placeholder="Referral Code (optional)" />
 
-      <div class="terms-box">
-        <input type="checkbox" id="agree_terms" name="agree_terms" />
-        <label for="agree_terms">
-          I agree to the <a id="openTerms">Terms of Service</a> & <a id="openPrivacy">Privacy Policy</a>
+      <div class="terms-row" style="margin-top:6px">
+        <input id="agree_terms" name="agree_terms" type="checkbox" />
+        <label for="agree_terms" class="muted" style="line-height:1.15">
+          I agree to the <a id="openTermsLink">Terms of Service</a> &amp; <a id="openPrivacyLink">Privacy Policy</a>
         </label>
       </div>
 
-      <button type="submit">Register</button>
+      <div style="margin-top:12px">
+        <button type="submit">Register</button>
+      </div>
     </form>
 
+    <!-- Server-side messages -->
     {% if msg %}
       <div class="msg {{ msg_type }}">{{ msg }}</div>
     {% endif %}
-    <p>Already have an account? <a href="/login">Login here</a></p>
+
+    <p class="small-note">Already have an account? <a href="/login">Login here</a></p>
   </div>
 
-  <!-- Modal -->
-  <div id="termsModal" class="modal">
-    <div class="modal-content">
-      <span class="close" id="closeModal">&times;</span>
-      <h3>EVOSGPT Terms of Service & Privacy Policy</h3>
-      <p><strong>1. Usage:</strong> You agree to use EVOSGPT responsibly. No spam, abuse, or illegal activity.</p>
-      <p><strong>2. Data:</strong> Chats may be stored anonymously for AI improvement. Personal data is not shared.</p>
-      <p><strong>3. EVOSToken:</strong> Tokens are internal credits, non-transferable, and have no real-world value.</p>
-      <p><strong>4. Payments:</strong> Refunds only apply for failed paid-tier activations.</p>
-      <p><strong>5. Privacy:</strong> Your account data is encrypted and not sold to third parties.</p>
-      <p><strong>6. Acknowledgment:</strong> Continuing registration indicates acceptance of these terms.</p>
-      <button class="agree-btn" id="agreeClose">Agree & Close</button>
+  <!-- Dual-tab Hybrid Modal -->
+  <div id="legalModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="legalTitle">
+    <div class="modal-card" role="document">
+      <div class="modal-header">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="display:flex;flex-direction:column">
+            <div id="legalTitle" style="font-weight:800;color:var(--primary)">EVOSGPT — Terms & Privacy</div>
+            <div class="small-note">Please review before registering.</div>
+          </div>
+        </div>
+
+        <div class="tabs" role="tablist">
+          <div id="tabTerms" class="tab active" role="tab" aria-selected="true" tabindex="0">Terms of Service</div>
+          <div id="tabPrivacy" class="tab" role="tab" aria-selected="false" tabindex="0">Privacy Policy</div>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div class="tab-content" aria-live="polite">
+          <div id="termsContent" class="content-section active legal-section" tabindex="0">
+            <h3>EVOSToken Policy & Terms of Service</h3>
+
+            <p><strong>Platform Overview</strong><br>
+            EVOSGPT is an AI chat platform hosted on Render (evosgpt.onrender.com). It includes tiered access, live chat interaction, token rewards, and a built-in referral & upgrade system.</p>
+
+            <p><strong>Tiers & Pricing Structure</strong><br>
+            Basic (Free), Core ($1), Pro ($5), King ($9). Founder is a hidden administrative tier. Tokens are granted based on tier and chat activity.</p>
+
+            <p><strong>Usage Terms</strong><br>
+            EVOSGPT is an AI assistant platform. Users must not abuse, spam, or misuse the service. Prohibited activities include illegal uses, harassment, and automated misuse that harms platform stability.</p>
+
+            <p><strong>EVOSToken Policy</strong><br>
+            EVOSToken is an internal gamified credit system. Tokens are awarded according to tier (e.g., Basic: 1 per 10–15 chats; Core: 3 per chat cycle; Pro: 5–10; King: 10–20). Tokens are:</p>
+            <ul>
+              <li>Internal credits only — non-transferable and have no real-world cash value.</li>
+              <li>Usable to redeem in-platform items such as tier upgrades, profile themes, and analytics unlocks.</li>
+              <li>Not withdrawable as cash. If a future withdrawal feature is added, processing windows may be 1–24 hours depending on amount and verification.</li>
+            </ul>
+
+            <p><strong>Payments & Refunds</strong><br>
+            Prices are $1 (Core), $5 (Pro), $9 (King). Refunds are only offered for technical failures during paid-tier activation. All payments are final unless the platform fails to deliver the paid tier due to a technical issue.</p>
+
+            <p><strong>Referral Program</strong><br>
+            Users may invite others via personal referral links. Fraudulent self-referrals or abuse of the referral program may result in suspension or reversal of rewards. Referral counts and leaderboards are managed at the platform's discretion.</p>
+
+            <p><strong>Data & Third-Party Clause</strong><br>
+            User chats may be used anonymously to train models or for research. All personal identifiers will be removed before processing. The platform integrates with certain third-party services (e.g., Supabase) for sync; these integrations are used only for service delivery.</p>
+
+            <p><strong>Privacy & Security</strong><br>
+            Data is stored and transmitted securely. Account data is encrypted in transit and at rest where feasible. EVOSGPT does not sell personal data to third parties. Users should not share extremely sensitive personal information via chat.</p>
+
+            <p><strong>Referral & Tier Assignment</strong><br>
+            New users may receive promotional tier assignments (e.g., first 100 users promoted to Pro). Referral codes are generated and assigned at registration. The platform reserves the right to adjust promotional tiers and token rates.</p>
+
+            <p><strong>Acknowledgment & Acceptance</strong><br>
+            By registering, you acknowledge and agree to these Terms of Service, the EVOSToken Policy, and the Privacy Policy. First-time users must tick “I Agree to Terms & Policy” before registration can proceed. Continued use of the service implies acceptance of future updates to these terms.</p>
+
+            <p><strong>Enforcement & Suspension</strong><br>
+            Violations of these terms may result in warnings, temporary suspension, or permanent account termination, at the discretion of EVOSGPT administrators.</p>
+
+            <hr>
+
+            <h4>Technical & Operational Notes</h4>
+            <p>Platform built with Flask (Python) and hosted on Render. Local JS/CSS assets ensure fast loading. System notices and referral counters may auto-refresh using AJAX calls. The platform reserves the right to change features, pricing, and policies with prior notice.</p>
+          </div>
+
+          <div id="privacyContent" class="content-section legal-section" tabindex="0">
+            <h3>Privacy Policy (Summary)</h3>
+
+            <p><strong>Data Collection</strong><br>
+            EVOSGPT collects account data (username, email), usage metrics, chat content, and referral data. Personal identifiers are removed from chat logs used to train models or for analytics.</p>
+
+            <p><strong>Data Use</strong><br>
+            Data is used to provide, maintain, and improve services, to communicate with users about account and product updates, and to detect abuse or fraud. Anonymized chat data may be used to train and improve AI models.</p>
+
+            <p><strong>Data Sharing & Third Parties</strong><br>
+            EVOSGPT may share data with trusted service providers (e.g., Supabase) for storage, analytics, and delivering essential features. Third-party integrations are limited to what is necessary for platform operation.</p>
+
+            <p><strong>Retention & Deletion</strong><br>
+            Account and chat data retention follows internal policies. Users may request account deletion; upon successful deletion, identifiers will be removed subject to backup/retention windows required for compliance and fraud prevention.</p>
+
+            <p><strong>Security</strong><br>
+            Data is protected using industry-standard encryption for transit and reasonable practices for storage. No system is 100% secure; users should avoid sharing extremely sensitive data in chats.</p>
+
+            <p><strong>Cookies & Local Storage</strong><br>
+            The site uses cookies/localStorage for session management, theme preference, and some UX features (like dark mode and referral links). Users can clear cookies via their browser to reset preferences.</p>
+
+            <p><strong>Children</strong><br>
+            The platform is not directed at children under 13. If you believe a child under 13 has created an account, contact support to request account closure.</p>
+
+            <p><strong>Policy Updates</strong><br>
+            EVOSGPT may update this policy. Material changes will be posted to the site and/ or communicated to users. Continued use after updates signifies acceptance.</p>
+
+            <hr>
+            <p class="muted">For full legal text, include this summary in your dedicated /terms and /privacy pages; show the modal summary at registration, and link to the full pages for complete detail.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <div class="flex-row" style="margin-right:auto; padding-left:6px">
+          <div class="muted" style="font-size:13px">By continuing you agree to these terms.</div>
+        </div>
+        <button class="close-btn" id="closeLegal" aria-label="Close">Close</button>
+        <button class="agree-btn" id="agreeAndClose">Agree &amp; Close</button>
+      </div>
     </div>
   </div>
 
   <script>
-    // Theme setup
+    // Theme initialization (keep minimal)
     const savedTheme = localStorage.getItem("theme");
-    if (savedTheme) document.body.setAttribute("data-theme", savedTheme);
-    else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
+    if(savedTheme) document.body.setAttribute("data-theme", savedTheme);
+    else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
       document.body.setAttribute("data-theme", "dark");
 
-    // Modal logic
-    const modal = document.getElementById("termsModal");
-    const openTerms = document.getElementById("openTerms");
-    const openPrivacy = document.getElementById("openPrivacy");
-    const closeModal = document.getElementById("closeModal");
-    const agreeClose = document.getElementById("agreeClose");
+    // Elements
+    const modal = document.getElementById('legalModal');
+    const openTermsLink = document.getElementById('openTermsLink');
+    const openPrivacyLink = document.getElementById('openPrivacyLink');
+    const closeLegal = document.getElementById('closeLegal');
+    const agreeAndClose = document.getElementById('agreeAndClose');
+    const agreeCheckbox = document.getElementById('agree_terms');
+    const tabTerms = document.getElementById('tabTerms');
+    const tabPrivacy = document.getElementById('tabPrivacy');
+    const termsContent = document.getElementById('termsContent');
+    const privacyContent = document.getElementById('privacyContent');
 
-    openTerms.onclick = openPrivacy.onclick = () => modal.style.display = "flex";
-    closeModal.onclick = () => modal.style.display = "none";
-    agreeClose.onclick = () => {
-      modal.style.display = "none";
-      document.getElementById("agree_terms").checked = true;
-    };
-    window.onclick = (e) => { if (e.target === modal) modal.style.display = "none"; };
+    // Open modal helpers
+    function openModal(activeTab = 'terms'){
+      modal.classList.add('show');
+      if(activeTab === 'privacy') activateTab('privacy');
+      else activateTab('terms');
+      // focus for accessibility
+      (activeTab === 'privacy' ? privacyContent : termsContent).focus();
+      document.body.style.overflow = 'hidden';
+    }
+    function closeModal(){
+      modal.classList.remove('show');
+      document.body.style.overflow = '';
+    }
 
-    // Form validation
-    document.getElementById("registerForm").addEventListener("submit", (e) => {
-      const checkbox = document.getElementById("agree_terms");
-      if (!checkbox.checked) {
+    // Tab activation
+    function activateTab(name){
+      if(name === 'privacy'){
+        tabPrivacy.classList.add('active'); tabPrivacy.setAttribute('aria-selected','true');
+        tabTerms.classList.remove('active'); tabTerms.setAttribute('aria-selected','false');
+        privacyContent.classList.add('active'); termsContent.classList.remove('active');
+      } else {
+        tabTerms.classList.add('active'); tabTerms.setAttribute('aria-selected','true');
+        tabPrivacy.classList.remove('active'); tabPrivacy.setAttribute('aria-selected','false');
+        termsContent.classList.add('active'); privacyContent.classList.remove('active');
+      }
+    }
+
+    // click handlers
+    openTermsLink.addEventListener('click', (e)=>{ e.preventDefault(); openModal('terms'); });
+    openPrivacyLink.addEventListener('click', (e)=>{ e.preventDefault(); openModal('privacy'); });
+    closeLegal.addEventListener('click', ()=> closeModal());
+    agreeAndClose.addEventListener('click', ()=>{
+      agreeCheckbox.checked = true;
+      closeModal();
+      agreeCheckbox.focus();
+    });
+
+    // Tab clicks
+    tabTerms.addEventListener('click', ()=> activateTab('terms'));
+    tabPrivacy.addEventListener('click', ()=> activateTab('privacy'));
+
+    // Close modal on outside click
+    modal.addEventListener('click', (e)=>{
+      if(e.target === modal) closeModal();
+    });
+
+    // keyboard: Esc to close
+    window.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') closeModal(); });
+
+    // Form validation front-end guard
+    const form = document.getElementById('registerForm');
+    form.addEventListener('submit', (e)=>{
+      // Basic confirm password check (keeps consistent UX)
+      const pwd = form.querySelector('input[name="password"]').value;
+      const cpwd = form.querySelector('input[name="confirm_password"]').value;
+      if(pwd !== cpwd){
         e.preventDefault();
-        alert("Please agree to the Terms & Privacy Policy before continuing.");
+        alert('Passwords do not match.');
+        return;
+      }
+
+      if(!agreeCheckbox.checked){
+        e.preventDefault();
+        // open modal on terms tab to encourage signing
+        openModal('terms');
+        // small visual nudge is handled by modal opening
       }
     });
+
+    // If user arrives with a hash ?open=terms or #terms (optional)
+    if(window.location.hash === '#terms') openModal('terms');
+    if(window.location.hash === '#privacy') openModal('privacy');
   </script>
 </body>
 </html>
