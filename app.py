@@ -1924,6 +1924,42 @@ def register():
 
     return render_template("register.html")
 
+@app.route("/referral")
+def referral():
+    # ✅ Only logged-in users can access
+    if "user_id" not in session:
+        flash("Please log in to access your referral link.", "warning")
+        return redirect(url_for("login"))
+
+    user_id = session["user_id"]
+
+    try:
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
+        c.execute("SELECT username, referral_code, referrals_used, referral_tokens FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        conn.close()
+
+        if not row:
+            flash("User not found.", "danger")
+            return redirect(url_for("login"))
+
+        username, ref_code, used, earned_tokens = row
+        invite_link = f"{request.host_url}register?ref={ref_code}"
+
+        return render_template(
+            "referral.html",
+            username=username,
+            invite_link=invite_link,
+            used=used,
+            earned_tokens=earned_tokens
+        )
+
+    except Exception as e:
+        print(f"[ERROR] Referral route failed: {e}")
+        flash("An error occurred loading your referral page.", "danger")
+        return redirect(url_for("index"))
+
 @app.route("/logout")
 def logout():
     if "user_id" in session:
@@ -2325,6 +2361,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
