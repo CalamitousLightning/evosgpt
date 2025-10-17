@@ -1719,11 +1719,14 @@ def login():
 
 
 import re
-EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-
-ALLOWED_DOMAINS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com"}  # optional
 import uuid
 import random, string
+import sqlite3
+from flask import request, render_template, redirect, url_for, session, flash
+from werkzeug.security import generate_password_hash
+
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+ALLOWED_DOMAINS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com"}  # optional
 
 def generate_referral_code():
     """Generate a clean referral code like REF-1A2B3C"""
@@ -1736,7 +1739,7 @@ def register():
         username = request.form["username"].strip()
         email = request.form.get("email", "").strip()
         password = request.form["password"]
-        agree_terms = request.form.get("agree_terms")  # ✅ checkbox value
+        agree_terms = request.form.get("agree_terms")
 
         # 🔹 Validation
         if not username or not password or not email:
@@ -1793,9 +1796,9 @@ def register():
             except Exception as e:
                 print(f"[WARN] Failed to sync user to Supabase: {e}")
 
-            session["user_id"] = new_user_id
-            session["tier"] = tier
-            return redirect(url_for("chat"))
+            # ✅ Redirect to login instead of auto-login
+            flash("✅ Account created successfully! Please log in to continue.", "success")
+            return redirect(url_for("login"))
 
         except sqlite3.IntegrityError:
             return render_template("register.html", msg="❌ Username or email already exists.")
@@ -2206,6 +2209,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
