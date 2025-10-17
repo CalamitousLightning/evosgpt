@@ -254,22 +254,23 @@
     <a href="/chat">💬 Chat</a>
 
     <div class="hub-toggle" onclick="toggleHub()">🌐 Hub ▼</div>
-    <div class="hub-content" id="hub">
-      <a href="/upgrade">⚡ Upgrade</a>
-      <a href="/analytics">📊 Analytics</a>
-      <a href="/logs">📜 Logs</a>
-      <a href="/tiers">📖 Tiers & Benefits</a>
-      <a href="/evostoken">🪙 EvosToken</a>
-      {% if tier in ["King", "Founder"] %}
-        <a href="/admin">🛠 Admin Dashboard</a>
-      {% endif %}
-      {% if not logged_in %}
-        <a href="/login">🔑 Login</a>
-        <a href="/register">📝 Register</a>
-      {% else %}
-        <a href="/logout">🚪 Logout</a>
-      {% endif %}
-    </div>
+<div class="hub-content" id="hub">
+  <a href="/upgrade">⚡ Upgrade</a>
+  <a href="/analytics">📊 Analytics</a>
+  <a href="/logs">📜 Logs</a>
+  <a href="/tiers">📖 Tiers & Benefits</a>
+  <a href="/referral">🎁 Invite Friends</a>
+  <a href="/evostoken">🪙 EvosToken</a>
+  {% if tier in ["King", "Founder"] %}
+    <a href="/admin">🛠 Admin Dashboard</a>
+  {% endif %}
+  {% if not logged_in %}
+    <a href="/login">🔑 Login</a>
+    <a href="/register">📝 Register</a>
+  {% else %}
+    <a href="/logout">🚪 Logout</a>
+  {% endif %}
+</div>
 
     <div id="system-notices">
       <h3>📢 System Notices</h3>
@@ -409,3 +410,4 @@
 </script>
 </body>
 </html>
+
