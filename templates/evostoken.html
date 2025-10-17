@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}EVOSToken Wallet{% endblock %}
+{% block content %}
+<div class="evos-token-page max-w-3xl mx-auto px-4 py-10 text-center">
+
+    <h1 class="text-4xl font-bold text-white mb-6">💠 EVOSToken Wallet</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Total Tokens -->
+        <div class="rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-2">Total Tokens</h2>
+            <p class="text-4xl font-bold text-white">{{ tokens }}</p>
+        </div>
+
+        <!-- Chat Tokens -->
+        <div class="rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-700 p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-2">Chat Rewards</h2>
+            <p class="text-4xl font-bold text-white">{{ chat_tokens }}</p>
+        </div>
+
+        <!-- Referral Tokens -->
+        <div class="rounded-2xl bg-gradient-to-br from-emerald-600 to-green-700 p-6 shadow-lg">
+            <h2 class="text-xl font-semibold text-white mb-2">Referral Bonus</h2>
+            <p class="text-4xl font-bold text-white">{{ referral_tokens }}</p>
+        </div>
+    </div>
+
+    <div class="mt-10 bg-gray-900 bg-opacity-60 rounded-2xl p-6 shadow-lg">
+        <h2 class="text-2xl font-semibold text-white mb-3">Your Tier</h2>
+        <div class="inline-block rounded-full bg-gradient-to-r from-pink-500 to-red-600 text-white px-6 py-2 text-lg font-bold">
+            {{ tier }}
+        </div>
+    </div>
+
+    <div class="mt-10 text-gray-300">
+        <h3 class="text-xl font-semibold mb-3">How to Earn More EVOSTokens</h3>
+        <ul class="text-left max-w-md mx-auto space-y-2">
+            <li>💬 Chat actively to earn small daily bonuses.</li>
+            <li>👥 Invite friends — each referral gives you bonus tokens.</li>
+            <li>🚀 Upgrade your tier for higher earning rates.</li>
+            <li>🎯 Complete tasks or community challenges.</li>
+        </ul>
+    </div>
+
+    <div class="mt-10">
+        <a href="{{ url_for('chat_ui') }}" 
+           class="inline-block bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold py-2 px-6 rounded-full shadow hover:opacity-90 transition">
+           Back to Chat
+        </a>
+    </div>
+</div>
+
+<style>
+.evos-token-page {
+    font-family: 'Inter', sans-serif;
+    color: #f5f5f5;
+}
+</style>
+
+{% endblock %}
