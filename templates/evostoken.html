@@ -1,60 +1,116 @@
-{% extends "base.html" %}
-{% block title %}EVOSToken Wallet{% endblock %}
+{% extends "layout.html" %}  <!-- or copy your index.html header/sidebar base -->
+
 {% block content %}
-<div class="evos-token-page max-w-3xl mx-auto px-4 py-10 text-center">
+<div class="evostoken-container">
+  <h2>🪙 EVOSToken Hub</h2>
 
-    <h1 class="text-4xl font-bold text-white mb-6">💠 EVOSToken Wallet</h1>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab" onclick="switchTab('leaderboard')">Leaderboard</button>
+  </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- Total Tokens -->
-        <div class="rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 p-6 shadow-lg">
-            <h2 class="text-xl font-semibold text-white mb-2">Total Tokens</h2>
-            <p class="text-4xl font-bold text-white">{{ tokens }}</p>
-        </div>
-
-        <!-- Chat Tokens -->
-        <div class="rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-700 p-6 shadow-lg">
-            <h2 class="text-xl font-semibold text-white mb-2">Chat Rewards</h2>
-            <p class="text-4xl font-bold text-white">{{ chat_tokens }}</p>
-        </div>
-
-        <!-- Referral Tokens -->
-        <div class="rounded-2xl bg-gradient-to-br from-emerald-600 to-green-700 p-6 shadow-lg">
-            <h2 class="text-xl font-semibold text-white mb-2">Referral Bonus</h2>
-            <p class="text-4xl font-bold text-white">{{ referral_tokens }}</p>
-        </div>
+  <!-- DASHBOARD -->
+  <div id="dashboard" class="tab-content active">
+    <div class="stats-grid">
+      <div class="card tier-{{ tier|lower }}">
+        <h3>{{ tier }} Mode</h3>
+        <p>{{ username }}</p>
+      </div>
+      <div class="card"><h4>Total EVOSTokens</h4><p>{{ total_tokens }}</p></div>
+      <div class="card"><h4>Base Tokens</h4><p>{{ tokens }}</p></div>
+      <div class="card"><h4>Chat Tokens</h4><p>{{ chat_tokens }}</p></div>
+      <div class="card"><h4>Referral Tokens</h4><p>{{ referral_tokens }}</p></div>
     </div>
+  </div>
 
-    <div class="mt-10 bg-gray-900 bg-opacity-60 rounded-2xl p-6 shadow-lg">
-        <h2 class="text-2xl font-semibold text-white mb-3">Your Tier</h2>
-        <div class="inline-block rounded-full bg-gradient-to-r from-pink-500 to-red-600 text-white px-6 py-2 text-lg font-bold">
-            {{ tier }}
-        </div>
-    </div>
-
-    <div class="mt-10 text-gray-300">
-        <h3 class="text-xl font-semibold mb-3">How to Earn More EVOSTokens</h3>
-        <ul class="text-left max-w-md mx-auto space-y-2">
-            <li>💬 Chat actively to earn small daily bonuses.</li>
-            <li>👥 Invite friends — each referral gives you bonus tokens.</li>
-            <li>🚀 Upgrade your tier for higher earning rates.</li>
-            <li>🎯 Complete tasks or community challenges.</li>
-        </ul>
-    </div>
-
-    <div class="mt-10">
-        <a href="{{ url_for('chat_ui') }}" 
-           class="inline-block bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-semibold py-2 px-6 rounded-full shadow hover:opacity-90 transition">
-           Back to Chat
-        </a>
-    </div>
+  <!-- LEADERBOARD -->
+  <div id="leaderboard" class="tab-content">
+    <table class="leaderboard">
+      <thead>
+        <tr><th>#</th><th>User</th><th>Tier</th><th>Total Tokens</th></tr>
+      </thead>
+      <tbody>
+        {% for rank, user in enumerate(leaderboard, start=1) %}
+        <tr class="tier-{{ user[1]|lower }}">
+          <td>{{ rank }}</td>
+          <td>{{ user[0] }}</td>
+          <td>{{ user[1] }}</td>
+          <td>{{ user[2] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
 <style>
-.evos-token-page {
-    font-family: 'Inter', sans-serif;
-    color: #f5f5f5;
+.evostoken-container {
+  padding: 80px 20px;
+  text-align: center;
+  color: var(--text-color);
+}
+.tabs { margin-bottom: 20px; }
+.tab {
+  background: var(--chat-bot-bg);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+  padding: 8px 20px;
+  margin: 0 5px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+}
+.tab.active { background: var(--primary-color); color: #fff; }
+
+.tab-content { display: none; animation: fadeIn 0.4s ease; }
+.tab-content.active { display: block; }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  justify-items: center;
+}
+.card {
+  background: var(--chat-bot-bg);
+  padding: 16px;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  width: 180px;
+  border: 1px solid var(--border-color);
+}
+.card h3, .card h4 { margin: 4px 0; color: var(--primary-color); }
+
+.leaderboard {
+  width: 100%;
+  max-width: 700px;
+  margin: 0 auto;
+  border-collapse: collapse;
+}
+.leaderboard th, .leaderboard td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+.leaderboard th { background: var(--chat-bot-bg); }
+
+.tier-basic td { color: gray; }
+.tier-core td { color: #00bcd4; }
+.tier-pro td { color: #9c27b0; }
+.tier-king td { color: gold; }
+.tier-founder td { color: crimson; text-shadow: 0 0 8px crimson; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
 
+<script>
+function switchTab(tab) {
+  document.querySelectorAll(".tab").forEach(btn => btn.classList.remove("active"));
+  document.querySelectorAll(".tab-content").forEach(div => div.classList.remove("active"));
+  document.querySelector(`.tab[onclick*="${tab}"]`).classList.add("active");
+  document.getElementById(tab).classList.add("active");
+}
+</script>
 {% endblock %}
