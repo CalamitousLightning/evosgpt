@@ -172,8 +172,29 @@ else:
     sqlite3.connect = sqlite_connect_wrapper
 
 
-# ---------- DB INIT (extended with guests + summaries) ----------
 # ---------- DB INIT (no summaries, chats stay linked in chat_logs/memory) ----------
+import random, string
+
+def generate_referral_code():
+    """Generate a unique referral code like REF-AB12CD"""
+    return "REF-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+def ensure_referral_codes():
+    """Assign referral codes to users missing one"""
+    conn = sqlite3.connect("database/memory.db")
+    c = conn.cursor()
+
+    c.execute("SELECT id FROM users WHERE referral_code IS NULL OR referral_code = ''")
+    missing = c.fetchall()
+
+    for (user_id,) in missing:
+        code = generate_referral_code()
+        c.execute("UPDATE users SET referral_code = ? WHERE id = ?", (code, user_id))
+
+    conn.commit()
+    conn.close()
+
+
 def init_db():
     db_mode = os.getenv("DB_MODE", "sqlite").lower()  # "sqlite" or "supabase"/"postgres"
 
@@ -193,10 +214,20 @@ def init_db():
                 status TEXT DEFAULT 'active',
                 referral_code TEXT UNIQUE,
                 referrals_used INTEGER DEFAULT 0,
+                tokens INTEGER DEFAULT 0,
+                referral_tokens INTEGER DEFAULT 0,
+                chat_tokens INTEGER DEFAULT 0,
                 upgrade_expiry DATETIME,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # ✅ EVOSToken columns safety-check
+        for col in ["tokens", "referral_tokens", "chat_tokens"]:
+            try:
+                c.execute(f"ALTER TABLE users ADD COLUMN {col} INTEGER DEFAULT 0")
+            except sqlite3.OperationalError:
+                pass
 
         # ✅ guests table
         c.execute("""
@@ -249,8 +280,6 @@ def init_db():
                 FOREIGN KEY(guest_id) REFERENCES guests(id)
             )
         """)
-
-        # ❌ summaries REMOVED
 
         # ✅ analytics
         c.execute("""
@@ -307,6 +336,9 @@ def init_db():
         conn.commit()
         conn.close()
 
+        # ✅ Assign referral codes automatically (new + old users)
+        ensure_referral_codes()
+   
     elif db_mode in ("supabase", "postgres"):
         if psycopg2 is None:
             raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
@@ -324,6 +356,9 @@ def init_db():
             status TEXT NOT NULL DEFAULT 'active',
             referral_code TEXT UNIQUE,
             referrals_used INTEGER DEFAULT 0,
+            tokens INTEGER DEFAULT 0,
+            referral_tokens INTEGER DEFAULT 0,
+            chat_tokens INTEGER DEFAULT 0,
             upgrade_expiry TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -373,8 +408,6 @@ def init_db():
             time_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
-
-        # ❌ summaries REMOVED
 
         # ✅ analytics
         cur.execute("""
@@ -429,6 +462,7 @@ def init_db():
         conn.commit()
         cur.close()
         conn.close()
+
 
 # ---------- small helper for SQLite ALTERs (idempotent) ----------
 def safe_alters_sqlite(cursor):
@@ -1103,6 +1137,7 @@ def chat():
 
     tier = session.get("tier", "Basic")
     reply = None
+    new_token_balance = None  # will be sent back to frontend
 
     # --- Guest mode ---
     guest_id = None
@@ -1173,7 +1208,6 @@ def chat():
     if reply is None:
         try:
             raw_reply = route_ai_call(tier, user_msg)
-            # ✅ Trust system prompt formatting, just polish with auto_paragraph for safety
             reply = auto_paragraph(raw_reply)
         except Exception as e:
             log_suspicious("LLMError", str(e))
@@ -1184,10 +1218,19 @@ def chat():
 
 > {user_msg}"""
 
-    # --- Save chat ---
+    # --- Save chat + award tokens ---
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
+
+        # 🎁 Tier-based EVOSToken reward values
+        tier_rewards = {
+            "Basic": 1,
+            "Core": 2,
+            "Pro": 5,
+            "King": 10,
+            "Founder": 20
+        }
 
         if "user_id" in session:
             uid = session["user_id"]
@@ -1197,6 +1240,20 @@ def chat():
             )
             conn.commit()
             enforce_memory_limit(uid, tier)
+
+            # ✅ Update user tokens in real time
+            earned = tier_rewards.get(tier, 1)
+            c.execute("""
+                UPDATE users
+                SET chat_tokens = chat_tokens + ?, tokens = tokens + ?
+                WHERE id = ?
+            """, (earned, earned, uid))
+            conn.commit()
+
+            # Retrieve new total to send to frontend
+            c.execute("SELECT tokens FROM users WHERE id = ?", (uid,))
+            new_token_balance = c.fetchone()[0]
+
         elif guest_id:
             c.execute(
                 "INSERT INTO memory (guest_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
@@ -1205,10 +1262,16 @@ def chat():
             conn.commit()
 
         conn.close()
+
     except Exception as e:
         log_suspicious("ChatInsertFail", str(e))
 
-    return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
+    return jsonify({
+        "reply": reply.replace("\\n", "\n"),
+        "tier": tier,
+        "tokens": new_token_balance  # frontend can update sidebar display
+    })
+
 
 
 
@@ -1639,6 +1702,28 @@ def analytics_dashboard():
                            system_messages=system_messages)
 
 # ---------- AUTH ROUTES ----------
+@app.route("/evostoken")
+def evostoken():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    conn = sqlite3.connect("database/memory.db")
+    c = conn.cursor()
+    c.execute("SELECT tokens, chat_tokens, referral_tokens, tier FROM users WHERE id = ?", (session["user_id"],))
+    row = c.fetchone()
+    conn.close()
+
+    if not row:
+        return redirect(url_for("login"))
+    
+    tokens, chat_tokens, referral_tokens, tier = row
+    return render_template(
+        "evostoken.html",
+        tokens=tokens,
+        chat_tokens=chat_tokens,
+        referral_tokens=referral_tokens,
+        tier=tier
+    )
+
 import random
 
 @app.route("/login", methods=["GET", "POST"])
@@ -1726,11 +1811,37 @@ from flask import request, render_template, redirect, url_for, session, flash
 from werkzeug.security import generate_password_hash
 
 EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-ALLOWED_DOMAINS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com"}  # optional
+ALLOWED_DOMAINS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com"}
 
-def generate_referral_code():
-    """Generate a clean referral code like REF-1A2B3C"""
-    return "REF-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+def get_tier_rewards(tier):
+    """Returns tier-based EVOSToken rewards."""
+    rewards = {
+        "Basic": {"starter": 5, "per_chat": 1, "per_referral": 2},
+        "Core":  {"starter": 15, "per_chat": 2, "per_referral": 5},
+        "Pro":   {"starter": 30, "per_chat": 5, "per_referral": 10},
+        "King":  {"starter": 50, "per_chat": 10, "per_referral": 20},
+    }
+    return rewards.get(tier, rewards["Basic"])
+
+
+def reward_referrer(ref_code):
+    """Give referrer tokens based on their tier."""
+    conn = sqlite3.connect("database/memory.db")
+    c = conn.cursor()
+    try:
+        c.execute("SELECT id, tier FROM users WHERE referral_code = ?", (ref_code,))
+        row = c.fetchone()
+        if row:
+            ref_id, ref_tier = row
+            reward = get_tier_rewards(ref_tier)["per_referral"]
+            c.execute("""
+                UPDATE users
+                SET tokens = tokens + ?, referral_tokens = referral_tokens + ?, referrals_used = referrals_used + 1
+                WHERE id = ?
+            """, (reward, reward, ref_id))
+            conn.commit()
+    finally:
+        conn.close()
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -1741,39 +1852,44 @@ def register():
         password = request.form["password"]
         agree_terms = request.form.get("agree_terms")
 
-        # 🔹 Validation
+        # ✅ Validation
         if not username or not password or not email:
             return render_template("register.html", msg="Username, email, and password required.")
         if not agree_terms:
             return render_template("register.html", msg="Please agree to the Terms & Privacy Policy before continuing.")
         if not EMAIL_REGEX.match(email):
-            return render_template("register.html", msg="Invalid email format. Use a valid email like name@gmail.com")
-
+            return render_template("register.html", msg="Invalid email format.")
         domain = email.split("@")[-1].lower()
         if domain not in ALLOWED_DOMAINS:
-            return render_template("register.html", msg="Email must be from Gmail, Yahoo, Outlook, or Hotmail.")
+            return render_template("register.html", msg="Use Gmail, Yahoo, Outlook, or Hotmail.")
 
         hashed_pw = generate_password_hash(password)
+
         try:
             conn = sqlite3.connect("database/memory.db")
             c = conn.cursor()
 
+            # 🏷 Determine tier (first 100 users = Pro)
             c.execute("SELECT COUNT(*) FROM users")
             total_users = c.fetchone()[0]
             tier = "Pro" if total_users < 100 else "Basic"
             referral_code = generate_referral_code()
 
+            # 🎁 Starter tokens based on tier
+            starter = get_tier_rewards(tier)["starter"]
+
             c.execute("""
-                INSERT INTO users (username, email, password, tier, referral_code)
-                VALUES (?, ?, ?, ?, ?)
-            """, (username, email, hashed_pw, tier, referral_code))
+                INSERT INTO users (username, email, password, tier, referral_code, tokens, chat_tokens, referral_tokens)
+                VALUES (?, ?, ?, ?, ?, ?, 0, 0)
+            """, (username, email, hashed_pw, tier, referral_code, starter))
             new_user_id = c.lastrowid
 
+            # 👥 Handle referrer (if ?ref=REF-XXXXXX)
             referrer_code = request.args.get("ref")
             if referrer_code:
-                c.execute("UPDATE users SET referrals_used = referrals_used + 1 WHERE referral_code = ?", (referrer_code,))
-                conn.commit()
+                reward_referrer(referrer_code)
 
+            # 🧩 Guest migration
             guest_id = session.pop("guest_id", None)
             if guest_id:
                 try:
@@ -1786,18 +1902,19 @@ def register():
             conn.commit()
             conn.close()
 
+            # ☁ Optional Supabase sync
             try:
                 supabase.table("users").insert({
                     "username": username,
                     "email": email,
                     "tier": tier,
-                    "referral_code": referral_code
+                    "referral_code": referral_code,
+                    "tokens": starter
                 }).execute()
             except Exception as e:
-                print(f"[WARN] Failed to sync user to Supabase: {e}")
+                print(f"[WARN] Supabase sync failed: {e}")
 
-            # ✅ Redirect to login instead of auto-login
-            flash("✅ Account created successfully! Please log in to continue.", "success")
+            flash(f"✅ Account created! You’ve received {starter} EVOSTokens. Please log in.", "success")
             return redirect(url_for("login"))
 
         except sqlite3.IntegrityError:
@@ -1806,7 +1923,6 @@ def register():
             return render_template("register.html", msg=f"⚠ Error: {e}")
 
     return render_template("register.html")
-
 
 @app.route("/logout")
 def logout():
@@ -2209,6 +2325,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
