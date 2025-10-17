@@ -1711,13 +1711,20 @@ def evostoken():
     conn = sqlite3.connect("database/memory.db")
     c = conn.cursor()
 
-    # get user token info
-    c.execute("SELECT username, tier, tokens, chat_tokens, referral_tokens FROM users WHERE id = ?", (uid,))
+    # Retrieve token data for logged-in user
+    c.execute("""
+        SELECT username, tier, tokens, chat_tokens, referral_tokens
+        FROM users WHERE id = ?
+    """, (uid,))
     row = c.fetchone()
-    username, tier, tokens, chat_tokens, referral_tokens = row if row else ("?", "Basic", 0, 0, 0)
+    if row:
+        username, tier, tokens, chat_tokens, referral_tokens = row
+    else:
+        username, tier, tokens, chat_tokens, referral_tokens = "?", "Basic", 0, 0, 0
+
     total_tokens = tokens + chat_tokens + referral_tokens
 
-    # leaderboard: top 20 by total tokens
+    # Leaderboard: Top 20 by total tokens
     c.execute("""
         SELECT username, tier, tokens + chat_tokens + referral_tokens AS total
         FROM users
@@ -2378,6 +2385,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
