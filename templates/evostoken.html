@@ -1,9 +1,10 @@
-{% extends "layout.html" %}  <!-- or copy your index.html header/sidebar base -->
+{% extends "index.html" %}
 
 {% block content %}
 <div class="evostoken-container">
   <h2>🪙 EVOSToken Hub</h2>
 
+  <!-- Tabs -->
   <div class="tabs">
     <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
     <button class="tab" onclick="switchTab('leaderboard')">Leaderboard</button>
@@ -16,10 +17,22 @@
         <h3>{{ tier }} Mode</h3>
         <p>{{ username }}</p>
       </div>
-      <div class="card"><h4>Total EVOSTokens</h4><p>{{ total_tokens }}</p></div>
-      <div class="card"><h4>Base Tokens</h4><p>{{ tokens }}</p></div>
-      <div class="card"><h4>Chat Tokens</h4><p>{{ chat_tokens }}</p></div>
-      <div class="card"><h4>Referral Tokens</h4><p>{{ referral_tokens }}</p></div>
+      <div class="card">
+        <h4>Total EVOSTokens</h4>
+        <p>{{ total_tokens }}</p>
+      </div>
+      <div class="card">
+        <h4>Base Tokens</h4>
+        <p>{{ tokens }}</p>
+      </div>
+      <div class="card">
+        <h4>Chat Tokens</h4>
+        <p>{{ chat_tokens }}</p>
+      </div>
+      <div class="card">
+        <h4>Referral Tokens</h4>
+        <p>{{ referral_tokens }}</p>
+      </div>
     </div>
   </div>
 
@@ -45,10 +58,11 @@
 
 <style>
 .evostoken-container {
-  padding: 80px 20px;
+  padding: 90px 20px;
   text-align: center;
   color: var(--text-color);
 }
+
 .tabs { margin-bottom: 20px; }
 .tab {
   background: var(--chat-bot-bg);
@@ -78,6 +92,7 @@
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
   width: 180px;
   border: 1px solid var(--border-color);
+  backdrop-filter: blur(6px);
 }
 .card h3, .card h4 { margin: 4px 0; color: var(--primary-color); }
 
