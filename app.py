@@ -339,30 +339,43 @@ def init_db():
         # ✅ Assign referral codes automatically (new + old users)
         ensure_referral_codes()
    
-    elif db_mode in ("supabase", "postgres"):
-        if psycopg2 is None:
-            raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
-        conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
-        cur = conn.cursor()
+   elif db_mode in ("supabase", "postgres"):
+    if psycopg2 is None:
+        raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
+    conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
+    cur = conn.cursor()
 
-        # ✅ users
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            tier TEXT NOT NULL DEFAULT 'Basic',
-            status TEXT NOT NULL DEFAULT 'active',
-            referral_code TEXT UNIQUE,
-            referrals_used INTEGER DEFAULT 0,
-            tokens INTEGER DEFAULT 0,
-            referral_tokens INTEGER DEFAULT 0,
-            chat_tokens INTEGER DEFAULT 0,
-            upgrade_expiry TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    # ✅ users
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        tier TEXT NOT NULL DEFAULT 'Basic',
+        status TEXT NOT NULL DEFAULT 'active',
+        referral_code TEXT UNIQUE,
+        referrals_used INTEGER DEFAULT 0,
+        tokens INTEGER DEFAULT 0,
+        referral_tokens INTEGER DEFAULT 0,
+        chat_tokens INTEGER DEFAULT 0,
+        upgrade_expiry TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    # ✅ EVOSToken columns safety check
+    for col, dtype, default in [
+        ("tokens", "INTEGER", 0),
+        ("referral_tokens", "INTEGER", 0),
+        ("chat_tokens", "INTEGER", 0),
+        ("tier", "TEXT", "'Basic'"),
+    ]:
+        try:
+            cur.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {dtype} DEFAULT {default}")
+        except Exception as e:
+            print(f"[init_db] Column {col} check: {e}")
+
 
         # ✅ guests
         cur.execute("""
@@ -2385,6 +2398,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
