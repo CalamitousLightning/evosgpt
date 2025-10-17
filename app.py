@@ -1736,11 +1736,13 @@ def register():
         username = request.form["username"].strip()
         email = request.form.get("email", "").strip()
         password = request.form["password"]
+        agree_terms = request.form.get("agree_terms")  # ✅ checkbox value
 
         # 🔹 Validation
         if not username or not password or not email:
             return render_template("register.html", msg="Username, email, and password required.")
-
+        if not agree_terms:
+            return render_template("register.html", msg="Please agree to the Terms & Privacy Policy before continuing.")
         if not EMAIL_REGEX.match(email):
             return render_template("register.html", msg="Invalid email format. Use a valid email like name@gmail.com")
 
@@ -1749,33 +1751,26 @@ def register():
             return render_template("register.html", msg="Email must be from Gmail, Yahoo, Outlook, or Hotmail.")
 
         hashed_pw = generate_password_hash(password)
-
         try:
             conn = sqlite3.connect("database/memory.db")
             c = conn.cursor()
 
-            # 🔹 Assign tier (first 100 = Pro, rest Basic)
             c.execute("SELECT COUNT(*) FROM users")
             total_users = c.fetchone()[0]
             tier = "Pro" if total_users < 100 else "Basic"
-
-            # 🔹 Generate referral code for this new user
             referral_code = generate_referral_code()
 
-            # 🔹 Insert new user
             c.execute("""
                 INSERT INTO users (username, email, password, tier, referral_code)
                 VALUES (?, ?, ?, ?, ?)
             """, (username, email, hashed_pw, tier, referral_code))
             new_user_id = c.lastrowid
 
-            # 🔹 Handle referral usage if "?ref=" is in URL
             referrer_code = request.args.get("ref")
             if referrer_code:
                 c.execute("UPDATE users SET referrals_used = referrals_used + 1 WHERE referral_code = ?", (referrer_code,))
                 conn.commit()
 
-            # 🔹 Merge guest chats into this new user account
             guest_id = session.pop("guest_id", None)
             if guest_id:
                 try:
@@ -1788,7 +1783,6 @@ def register():
             conn.commit()
             conn.close()
 
-            # 🔹 Try to sync with Supabase (safe fail)
             try:
                 supabase.table("users").insert({
                     "username": username,
@@ -1799,10 +1793,8 @@ def register():
             except Exception as e:
                 print(f"[WARN] Failed to sync user to Supabase: {e}")
 
-            # 🔹 Auto-login user after register
             session["user_id"] = new_user_id
             session["tier"] = tier
-
             return redirect(url_for("chat_ui"))
 
         except sqlite3.IntegrityError:
@@ -1811,6 +1803,7 @@ def register():
             return render_template("register.html", msg=f"⚠ Error: {e}")
 
     return render_template("register.html")
+
 
 @app.route("/logout")
 def logout():
@@ -2213,6 +2206,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
