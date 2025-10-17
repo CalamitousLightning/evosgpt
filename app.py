@@ -1706,23 +1706,40 @@ def analytics_dashboard():
 def evostoken():
     if "user_id" not in session:
         return redirect(url_for("login"))
+
+    uid = session["user_id"]
     conn = sqlite3.connect("database/memory.db")
     c = conn.cursor()
-    c.execute("SELECT tokens, chat_tokens, referral_tokens, tier FROM users WHERE id = ?", (session["user_id"],))
+
+    # get user token info
+    c.execute("SELECT username, tier, tokens, chat_tokens, referral_tokens FROM users WHERE id = ?", (uid,))
     row = c.fetchone()
+    username, tier, tokens, chat_tokens, referral_tokens = row if row else ("?", "Basic", 0, 0, 0)
+    total_tokens = tokens + chat_tokens + referral_tokens
+
+    # leaderboard: top 20 by total tokens
+    c.execute("""
+        SELECT username, tier, tokens + chat_tokens + referral_tokens AS total
+        FROM users
+        ORDER BY total DESC
+        LIMIT 20
+    """)
+    leaderboard = c.fetchall()
+
     conn.close()
 
-    if not row:
-        return redirect(url_for("login"))
-    
-    tokens, chat_tokens, referral_tokens, tier = row
     return render_template(
         "evostoken.html",
+        username=username,
+        tier=tier,
         tokens=tokens,
         chat_tokens=chat_tokens,
         referral_tokens=referral_tokens,
-        tier=tier
+        total_tokens=total_tokens,
+        leaderboard=leaderboard,
+        logged_in=True
     )
+
 
 import random
 
@@ -2361,6 +2378,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
