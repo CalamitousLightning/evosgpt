@@ -1727,15 +1727,14 @@ def evostoken():
     c = conn.cursor()
 
     try:
-        # ✅ Retrieve token data for logged-in user
         c.execute("""
             SELECT username, tier, tokens, chat_tokens, referral_tokens
             FROM users WHERE id = ?
         """, (uid,))
         row = c.fetchone()
+
         if row:
             username, tier, tokens, chat_tokens, referral_tokens = row
-            # Avoid NoneType math errors
             tokens = tokens or 0
             chat_tokens = chat_tokens or 0
             referral_tokens = referral_tokens or 0
@@ -1744,7 +1743,6 @@ def evostoken():
 
         total_tokens = tokens + chat_tokens + referral_tokens
 
-        # ✅ Leaderboard: Top 20
         c.execute("""
             SELECT username, tier, tokens + chat_tokens + referral_tokens AS total
             FROM users
@@ -1769,9 +1767,9 @@ def evostoken():
         chat_tokens=chat_tokens,
         referral_tokens=referral_tokens,
         total_tokens=total_tokens,
-        leaderboard=leaderboard,
-        logged_in=True
+        leaderboard=leaderboard
     )
+
 
 
 
@@ -2412,6 +2410,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
