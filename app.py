@@ -1309,6 +1309,24 @@ def chat():
     })
 
 
+# ✅ Add this right after /chat
+@app.route("/get_messages", methods=["GET"])
+def get_messages():
+    user_id = session.get("user_id")
+    guest_id = session.get("guest_id")
+    conn = sqlite3.connect("database/memory.db")
+    c = conn.cursor()
+    if user_id:
+        c.execute("SELECT user_input, bot_response FROM memory WHERE user_id = ? ORDER BY id ASC", (user_id,))
+    elif guest_id:
+        c.execute("SELECT user_input, bot_response FROM memory WHERE guest_id = ? ORDER BY id ASC", (guest_id,))
+    else:
+        conn.close()
+        return jsonify([])
+    rows = c.fetchall()
+    conn.close()
+    messages = [{"user": u, "bot": b} for u, b in rows]
+    return jsonify(messages)
 
 
 @app.route("/chat/result", methods=["GET"])
@@ -2431,6 +2449,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
