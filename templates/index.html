@@ -192,11 +192,6 @@
       border: 1px solid var(--border-color);
     }
 
-    /* Paragraph & List Spacing (tighter) */
-    .bot .bot-content p { margin: 3px 0; }
-    .bot .bot-content ul, .bot .bot-content ol { margin: 4px 0 4px 16px; }
-    .bot .bot-content li { margin: 2px 0; }
-
     pre code {
       display: block;
       padding: 8px;
@@ -225,12 +220,19 @@
       padding: 10px;
       background: var(--chat-bot-bg);
       border-top: 1px solid var(--border-color);
+      flex-shrink: 0;
     }
     #message {
       flex: 1;
       padding: 12px;
       border: 1px solid var(--border-color);
       border-radius: 6px;
+      resize: none;
+      overflow: hidden;
+      line-height: 1.4;
+      min-height: 40px;
+      max-height: 180px;
+      font-family: inherit;
     }
     #chat-form button {
       padding: 12px 15px;
@@ -244,6 +246,23 @@
     }
 
     #typing-bubble { font-style: italic; opacity: 0.7; }
+
+    /* Mobile Fixes */
+    @media (max-width: 600px) {
+      header h1 { font-size: 14px; }
+      #chat-container { top: 60px; }
+      #upgrade-btn {
+        top: auto;
+        bottom: 70px;
+        position: fixed;
+      }
+      #chat-form {
+        flex-direction: column;
+      }
+      #message {
+        margin-bottom: 8px;
+      }
+    }
   </style>
 </head>
 
@@ -254,23 +273,23 @@
     <a href="/chat">💬 Chat</a>
 
     <div class="hub-toggle" onclick="toggleHub()">🌐 Hub ▼</div>
-<div class="hub-content" id="hub">
-  <a href="/upgrade">⚡ Upgrade</a>
-  <a href="/analytics">📊 Analytics</a>
-  <a href="/logs">📜 Logs</a>
-  <a href="/tiers">📖 Tiers & Benefits</a>
-  <a href="/referral">🎁 Invite Friends</a>
-  <a href="/evostoken">🪙 EvosToken</a>
-  {% if tier in ["King", "Founder"] %}
-    <a href="/admin">🛠 Admin Dashboard</a>
-  {% endif %}
-  {% if not logged_in %}
-    <a href="/login">🔑 Login</a>
-    <a href="/register">📝 Register</a>
-  {% else %}
-    <a href="/logout">🚪 Logout</a>
-  {% endif %}
-</div>
+    <div class="hub-content" id="hub">
+      <a href="/upgrade">⚡ Upgrade</a>
+      <a href="/analytics">📊 Analytics</a>
+      <a href="/logs">📜 Logs</a>
+      <a href="/tiers">📖 Tiers & Benefits</a>
+      <a href="/referral">🎁 Invite Friends</a>
+      <a href="/evostoken">🪙 EvosToken</a>
+      {% if tier in ["King", "Founder"] %}
+        <a href="/admin">🛠 Admin Dashboard</a>
+      {% endif %}
+      {% if not logged_in %}
+        <a href="/login">🔑 Login</a>
+        <a href="/register">📝 Register</a>
+      {% else %}
+        <a href="/logout">🚪 Logout</a>
+      {% endif %}
+    </div>
 
     <div id="system-notices">
       <h3>📢 System Notices</h3>
@@ -307,12 +326,17 @@
   <div id="chat-container">
     <div id="chat-box"></div>
     <form id="chat-form">
-      <input type="text" id="message" placeholder="Type your message..." autocomplete="off" required>
+      <textarea id="message" placeholder="Type your message..." autocomplete="off" required rows="1"></textarea>
       <button type="submit">Send</button>
     </form>
   </div>
 
 <script>
+  const chatBox = document.getElementById("chat-box");
+  const textarea = document.getElementById("message");
+
+  function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
+
   function toggleSidebar() {
     document.getElementById("sidebar").classList.toggle("active");
     document.getElementById("overlay").classList.toggle("active");
@@ -322,9 +346,7 @@
     hub.style.display = hub.style.display === "block" ? "none" : "block";
   }
 
-  const chatBox = document.getElementById("chat-box");
-  function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
-
+  // Theme Toggle
   const themeToggle = document.getElementById("theme-toggle");
   themeToggle.addEventListener("click", () => {
     const current = document.body.getAttribute("data-theme");
@@ -342,14 +364,47 @@
   document.body.setAttribute("data-theme", savedTheme || "light");
   themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
 
+  // Load Chat History
+  async function loadChatHistory() {
+    try {
+      const res = await fetch("/get_messages");
+      const data = await res.json();
+      chatBox.innerHTML = "";
+      data.forEach(msg => {
+        chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${msg.user}</div>`);
+        chatBox.insertAdjacentHTML("beforeend", `
+          <div class="msg bot">
+            <strong>EVOSGPT</strong><br>
+            <div class="bot-content">${marked.parse(msg.bot)}</div>
+          </div>
+        `);
+      });
+      scrollToBottom();
+    } catch (err) { console.error("Chat history load failed:", err); }
+  }
+  loadChatHistory();
+
+  // Auto-resizing textarea
+  textarea.addEventListener("input", () => {
+    textarea.style.height = "auto";
+    textarea.style.height = textarea.scrollHeight + "px";
+  });
+  textarea.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      document.getElementById("chat-form").dispatchEvent(new Event("submit"));
+    }
+  });
+
+  // Chat submission
   document.getElementById("chat-form").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const input = document.getElementById("message");
-    const text = input.value.trim();
+    const text = textarea.value.trim();
     if (!text) return;
     chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${text}</div>`);
     scrollToBottom();
-    input.value = "";
+    textarea.value = "";
+    textarea.style.height = "40px";
 
     const typing = document.createElement("div");
     typing.className = "msg bot";
@@ -364,10 +419,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text })
       });
-      if (!res.ok) throw new Error("Network error " + res.status);
       const data = await res.json();
       typing.remove();
-
       chatBox.insertAdjacentHTML("beforeend", `
         <div class="msg bot">
           <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
@@ -382,6 +435,7 @@
     }
   });
 
+  // Copy Button
   function copyText(button) {
     const text = button.parentElement.innerText.replace("📋", "").trim();
     navigator.clipboard.writeText(text).then(() => {
@@ -390,6 +444,7 @@
     });
   }
 
+  // System Notices
   async function loadNotices() {
     try {
       const res = await fetch("/system_notices");
@@ -410,4 +465,3 @@
 </script>
 </body>
 </html>
-
