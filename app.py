@@ -520,28 +520,48 @@ def enforce_memory_limit(user_id, tier):
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM memory WHERE user_id = ?", (user_id,))
-        row = c.fetchone()
-        total = row[0] if row else 0
 
-        if tier == "Basic":
-            limit = 30
-        elif tier == "Core":
-            limit = 100
-        else:
+        # Count total messages for the user
+        c.execute("SELECT COUNT(*) FROM memory WHERE user_id = ?", (user_id,))
+        total = c.fetchone()[0]
+
+        # Define memory limits per tier
+        tier_limits = {
+            "Basic": 30,
+            "Core": 100,
+            "Pro": 250,
+            "King": 1000,
+            "Founder": None  # Unlimited
+        }
+
+        limit = tier_limits.get(tier, 30)
+
+        # Skip deletion for unlimited tiers
+        if not limit or total <= limit:
             return
 
-        if total > limit:
-            to_delete = total - limit
+        # Delete oldest records beyond limit
+        to_delete = total - limit
+        c.execute("""
+            DELETE FROM memory
+            WHERE id IN (
+                SELECT id FROM memory
+                WHERE user_id = ?
+                ORDER BY id ASC
+                LIMIT ?
+            )
+        """, (user_id, to_delete))
+        conn.commit()
+
+        # Optional upgrade message (for Basic/Core users)
+        if tier in ["Basic", "Core"]:
             c.execute("""
-                DELETE FROM memory 
-                WHERE id IN (
-                    SELECT id FROM memory WHERE user_id = ? ORDER BY id ASC LIMIT ?
-                )
-            """, (user_id, to_delete))
+                INSERT INTO memory (user_id, bot_response, system_msg)
+                VALUES (?, ?, 1)
+            """, (user_id, "🧹 Some older chats were cleared to manage memory. Upgrade your tier to save longer history!"))
             conn.commit()
+
     except Exception as e:
-        # don't raise; just log suspicious for debug
         try:
             log_suspicious("EnforceMemoryError", str(e))
         except Exception:
@@ -549,6 +569,7 @@ def enforce_memory_limit(user_id, tier):
     finally:
         if conn:
             conn.close()
+
 
 # ---------- JOB STORE ----------
 import threading, random, time, sqlite3, requests, json, os
@@ -2410,6 +2431,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
