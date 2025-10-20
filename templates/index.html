@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="height=device-height, initial-scale=1.0, width=device-width, initial-scale=1.0" />
   <title>EVOSGPT</title>
 
   <!-- ✅ Favicon -->
@@ -45,8 +45,8 @@
       margin: 0;
       font-family: "Poppins", Arial, sans-serif;
       display: flex;
-      height: 100vh;
       flex-direction: column;
+      height: 100vh;
       background: var(--bg-color);
       color: var(--text-color);
       overflow: hidden;
@@ -156,15 +156,15 @@
       right: 0;
       display: flex;
       flex-direction: column;
+      background: var(--bg-color);
     }
+
     #chat-box {
       flex: 1;
-      padding: 12px 18px;
       overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      background: var(--bg-color);
+      padding: 12px 18px 90px;
       scroll-behavior: smooth;
+      box-sizing: border-box;
     }
 
     /* Messages */
@@ -214,54 +214,50 @@
     }
     .copy-btn:hover { color: #4caf50; opacity: 1; }
 
-    /* Chat Input */
+    /* Chat Input (Sticky bottom) */
     #chat-form {
       display: flex;
+      align-items: flex-end;
       padding: 10px;
       background: var(--chat-bot-bg);
       border-top: 1px solid var(--border-color);
-      flex-shrink: 0;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      box-sizing: border-box;
     }
+
     #message {
       flex: 1;
-      padding: 12px;
+      padding: 10px;
       border: 1px solid var(--border-color);
-      border-radius: 6px;
+      border-radius: 12px;
       resize: none;
-      overflow: hidden;
-      line-height: 1.4;
+      overflow-y: auto;
       min-height: 40px;
-      max-height: 180px;
+      max-height: 150px;
+      line-height: 1.4;
       font-family: inherit;
     }
+
     #chat-form button {
-      padding: 12px 15px;
-      margin-left: 8px;
+      margin-left: 10px;
+      padding: 10px 14px;
       background: var(--primary-color);
       border: none;
       color: white;
+      border-radius: 8px;
       font-weight: bold;
-      border-radius: 6px;
       cursor: pointer;
     }
 
     #typing-bubble { font-style: italic; opacity: 0.7; }
 
-    /* Mobile Fixes */
+    /* Mobile */
     @media (max-width: 600px) {
+      #chat-box { padding-bottom: 110px; }
       header h1 { font-size: 14px; }
-      #chat-container { top: 60px; }
-      #upgrade-btn {
-        top: auto;
-        bottom: 70px;
-        position: fixed;
-      }
-      #chat-form {
-        flex-direction: column;
-      }
-      #message {
-        margin-bottom: 8px;
-      }
     }
   </style>
 </head>
@@ -384,11 +380,13 @@
   }
   loadChatHistory();
 
-  // Auto-resizing textarea
+  // ✅ Auto-resize textarea
   textarea.addEventListener("input", () => {
     textarea.style.height = "auto";
-    textarea.style.height = textarea.scrollHeight + "px";
+    textarea.style.height = Math.min(textarea.scrollHeight, 150) + "px";
+    scrollToBottom();
   });
+
   textarea.addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
