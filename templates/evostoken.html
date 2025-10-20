@@ -150,13 +150,13 @@
           <tr><th>#</th><th>User</th><th>Tier</th><th>Total Tokens</th></tr>
         </thead>
         <tbody>
-          {% for rank, user in enumerate(leaderboard, start=1) %}
-          <tr class="tier-{{ user[1]|lower }}">
-            <td>{{ rank }}</td>
-            <td>{{ user[0] }}</td>
-            <td>{{ user[1] }}</td>
-            <td>{{ user[2] }}</td>
-          </tr>
+          {% for user in leaderboard %}
+            <tr class="tier-{{ user[1]|lower }}">
+              <td>{{ loop.index }}</td>
+              <td>{{ user[0] }}</td>
+              <td>{{ user[1] }}</td>
+              <td>{{ user[2] }}</td>
+            </tr>
           {% endfor %}
         </tbody>
       </table>
