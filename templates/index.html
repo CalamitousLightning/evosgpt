@@ -6,11 +6,9 @@
   <title>EVOSGPT</title>
 
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/evosgpt-icon.png') }}">
-  <link rel="shortcut icon" href="{{ url_for('static', filename='images/evosgpt-icon.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/github-dark.min.css') }}">
   <script src="{{ url_for('static', filename='js/marked.min.js') }}"></script>
   <script src="{{ url_for('static', filename='js/highlight.min.js') }}"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 
   <style>
     :root {
@@ -25,6 +23,7 @@
       --chat-bot-text: #333;
       --border-color: #ccc;
     }
+
     [data-theme="dark"] {
       --bg-color: #121212;
       --text-color: #f5f5f5;
@@ -38,28 +37,26 @@
     body {
       margin: 0;
       font-family: "Poppins", Arial, sans-serif;
-      height: 100vh;
       background: var(--bg-color);
       color: var(--text-color);
+      height: 100vh;
       overflow: hidden;
     }
 
-    /* Sidebar */
     #sidebar {
       width: 260px;
       background: var(--sidebar-bg);
       color: white;
       position: fixed;
-      top: 0;
-      left: -260px;
+      top: 0; left: -260px;
       height: 100%;
       transition: 0.3s;
-      padding-top: 60px;
       z-index: 1001;
       display: flex;
       flex-direction: column;
+      padding-top: 60px;
     }
-    #sidebar a { display: block; padding: 12px; color: white; text-decoration: none; }
+    #sidebar a { padding: 12px; color: white; text-decoration: none; display: block; }
     #sidebar a:hover { background: var(--primary-color); }
     #sidebar.active { left: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.4); }
 
@@ -67,38 +64,14 @@
       position: fixed; top: 0; left: 0;
       width: 100%; height: 100%;
       background: rgba(0,0,0,0.5);
-      display: none;
-      z-index: 1000;
+      display: none; z-index: 1000;
     }
     #overlay.active { display: block; }
 
-    .hub-toggle { cursor: pointer; padding: 12px; font-weight: bold; background: #333; border-top: 1px solid #444; }
+    .hub-toggle { cursor: pointer; padding: 12px; background: #333; border-top: 1px solid #444; }
     .hub-content { display: none; background: #2a2a2a; border-top: 1px solid #444; }
     .hub-content a { padding-left: 24px; }
 
-    /* Header */
-    header {
-      position: fixed;
-      width: 100%;
-      top: 0; left: 0;
-      background: var(--header-bg);
-      color: white;
-      padding: 8px 10px;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      z-index: 999;
-    }
-    header .menu-btn { cursor: pointer; font-size: 20px; }
-    header h1 {
-      margin: 0; font-size: 16px; flex: 1;
-      text-align: center;
-      display: flex; align-items: center; justify-content: center;
-    }
-    header h1 img { width: 20px; height: 20px; margin-right: 6px; }
-
-    /* Upgrade button */
     #upgrade-btn {
       position: fixed;
       top: 46px;
@@ -115,34 +88,50 @@
       z-index: 998;
     }
 
-    /* Chat Layout */
-    #chat-container {
-      position: fixed;
-      top: 75px;
-      bottom: 0;
-      left: 0;
-      right: 0;
+    /* Unified main layout */
+    #main-wrapper {
       display: flex;
       flex-direction: column;
-      background: var(--bg-color);
+      height: 100vh;
+      overflow-y: auto;
+      scroll-behavior: smooth;
     }
+
+    header {
+      background: var(--header-bg);
+      color: white;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+    }
+    header h1 img { width: 20px; height: 20px; margin-right: 6px; }
 
     #chat-box {
       flex: 1;
-      overflow-y: auto;
-      padding: 10px 16px 120px; /* keeps text area clear */
+      padding: 15px;
       box-sizing: border-box;
-      scroll-behavior: smooth;
     }
 
     .msg {
       max-width: 75%;
-      margin: 4px 0;
-      padding: 9px 12px;
-      border-radius: 10px;
-      line-height: 1.35;
+      margin: 6px 0;
+      padding: 10px 14px;
+      border-radius: 12px;
+      line-height: 1.4;
       word-wrap: break-word;
-      white-space: pre-wrap;
       position: relative;
     }
     .user {
@@ -158,7 +147,6 @@
       border-bottom-left-radius: 0;
       border: 1px solid var(--border-color);
     }
-
     .copy-btn {
       position: absolute;
       right: 10px;
@@ -166,60 +154,51 @@
       background: transparent;
       border: none;
       cursor: pointer;
-      font-size: 13px;
       color: var(--primary-color);
+      font-size: 13px;
     }
 
     #chat-form {
       display: flex;
       align-items: flex-end;
-      padding: 10px;
       background: var(--chat-bot-bg);
+      padding: 10px;
       border-top: 1px solid var(--border-color);
-      position: fixed;
+      flex-shrink: 0;
+      position: sticky;
       bottom: 0;
-      left: 0;
-      right: 0;
-      box-sizing: border-box;
     }
 
     #message {
       flex: 1;
       padding: 9px;
-      border: 1px solid var(--border-color);
       border-radius: 10px;
+      border: 1px solid var(--border-color);
       resize: none;
+      font-family: inherit;
       overflow-y: auto;
       min-height: 40px;
       max-height: 140px;
       line-height: 1.4;
-      font-family: inherit;
     }
 
     #chat-form button {
       margin-left: 8px;
       padding: 8px 12px;
       background: var(--primary-color);
-      border: none;
       color: white;
+      border: none;
       border-radius: 8px;
       font-weight: bold;
       cursor: pointer;
     }
 
-    @media (max-width: 600px) {
-      header h1 { font-size: 14px; }
-      #chat-box { padding-bottom: 130px; }
-    }
   </style>
 </head>
-
 <body>
-  <!-- Sidebar -->
   <div id="sidebar">
     <a href="javascript:void(0)" onclick="toggleSidebar()">⬅ Back</a>
     <a href="/chat">💬 Chat</a>
-
     <div class="hub-toggle" onclick="toggleHub()">🌐 Hub ▼</div>
     <div class="hub-content" id="hub">
       <a href="/upgrade">⚡ Upgrade</a>
@@ -241,125 +220,124 @@
   </div>
   <div id="overlay" onclick="toggleSidebar()"></div>
 
-  <!-- Header -->
-  <header>
-    <span class="menu-btn" onclick="toggleSidebar()">☰</span>
-    <h1>
-      <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" alt="EVOSGPT Logo">
-      EVOSGPT {{ icon }} {{ tier }} Mode
-    </h1>
-    <button id="theme-toggle">🌙</button>
-  </header>
-
   {% if tier not in ["King", "Founder"] %}
   <button id="upgrade-btn" onclick="location.href='/upgrade'">⚡ Upgrade Tier</button>
   {% endif %}
 
-  <!-- Chat -->
-  <div id="chat-container">
+  <div id="main-wrapper">
+    <header>
+      <span class="menu-btn" onclick="toggleSidebar()">☰</span>
+      <h1>
+        <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" alt="EVOSGPT">
+        EVOSGPT {{ icon }} {{ tier }} Mode
+      </h1>
+      <button id="theme-toggle">🌙</button>
+    </header>
+
     <div id="chat-box"></div>
+
     <form id="chat-form">
-      <textarea id="message" placeholder="Type your message..." autocomplete="off" required rows="1"></textarea>
+      <textarea id="message" placeholder="Type your message..." rows="1"></textarea>
       <button type="submit">Send</button>
     </form>
   </div>
 
-<script>
-  const chatBox = document.getElementById("chat-box");
-  const textarea = document.getElementById("message");
+  <script>
+    const chatBox = document.getElementById("chat-box");
+    const textarea = document.getElementById("message");
 
-  function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
-
-  async function loadChatHistory() {
-    const res = await fetch("/get_messages");
-    const data = await res.json();
-    chatBox.innerHTML = "";
-    data.forEach(msg => {
-      chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${msg.user}</div>`);
-      chatBox.insertAdjacentHTML("beforeend", `
-        <div class="msg bot">
-          <strong>EVOSGPT</strong><br>
-          <div class="bot-content">${marked.parse(msg.bot)}</div>
-          <button class="copy-btn" onclick="copyText(this)">📋</button>
-        </div>
-      `);
-    });
-    scrollToBottom();
-  }
-  loadChatHistory();
-
-  textarea.addEventListener("input", () => {
-    textarea.style.height = "auto";
-    textarea.style.height = Math.min(textarea.scrollHeight, 140) + "px";
-  });
-
-  document.getElementById("chat-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const text = textarea.value.trim();
-    if (!text) return;
-
-    chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${text}</div>`);
-    scrollToBottom();
-    textarea.value = "";
-    textarea.style.height = "40px";
-
-    const typing = document.createElement("div");
-    typing.className = "msg bot";
-    typing.id = "typing-bubble";
-    typing.innerHTML = "EVOSGPT is typing...";
-    chatBox.appendChild(typing);
-    scrollToBottom();
-
-    try {
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text })
-      });
-      const data = await res.json();
-      typing.remove();
-      chatBox.insertAdjacentHTML("beforeend", `
-        <div class="msg bot">
-          <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
-          <div class="bot-content">${marked.parse(data.reply)}</div>
-          <button class="copy-btn" onclick="copyText(this)">📋</button>
-        </div>
-      `);
-      scrollToBottom();
-    } catch (err) {
-      typing.remove();
-      chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot error">⚠ Error: ${err.message}</div>`);
+    function scrollToBottom() {
+      chatBox.scrollTop = chatBox.scrollHeight;
     }
-  });
 
-  function copyText(button) {
-    const text = button.parentElement.innerText.replace("📋", "").trim();
-    navigator.clipboard.writeText(text).then(() => {
-      button.textContent = "✅";
-      setTimeout(() => button.textContent = "📋", 1500);
+    async function loadChatHistory() {
+      const res = await fetch("/get_messages");
+      const data = await res.json();
+      chatBox.innerHTML = "";
+      data.forEach(msg => {
+        chatBox.insertAdjacentHTML("beforeend", `<div class='msg user'>${msg.user}</div>`);
+        chatBox.insertAdjacentHTML("beforeend", `
+          <div class='msg bot'>
+            <strong>EVOSGPT</strong><br>
+            <div class='bot-content'>${marked.parse(msg.bot)}</div>
+            <button class='copy-btn' onclick='copyText(this)'>📋</button>
+          </div>
+        `);
+      });
+      scrollToBottom();
+    }
+    loadChatHistory();
+
+    textarea.addEventListener("input", () => {
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 140) + "px";
     });
-  }
 
-  function toggleSidebar() {
-    document.getElementById("sidebar").classList.toggle("active");
-    document.getElementById("overlay").classList.toggle("active");
-  }
-  function toggleHub() {
-    const hub = document.getElementById("hub");
-    hub.style.display = hub.style.display === "block" ? "none" : "block";
-  }
+    document.getElementById("chat-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = textarea.value.trim();
+      if (!text) return;
+      chatBox.insertAdjacentHTML("beforeend", `<div class='msg user'>${text}</div>`);
+      scrollToBottom();
+      textarea.value = "";
+      textarea.style.height = "40px";
 
-  const themeToggle = document.getElementById("theme-toggle");
-  themeToggle.addEventListener("click", () => {
-    const current = document.body.getAttribute("data-theme");
-    const newTheme = current === "dark" ? "light" : "dark";
-    document.body.setAttribute("data-theme", newTheme);
-    themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
-    localStorage.setItem("theme", newTheme);
-  });
-  const savedTheme = localStorage.getItem("theme");
-  document.body.setAttribute("data-theme", savedTheme || "light");
-  themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
-</script>
+      const typing = document.createElement("div");
+      typing.className = "msg bot";
+      typing.id = "typing-bubble";
+      typing.innerText = "EVOSGPT is typing...";
+      chatBox.appendChild(typing);
+      scrollToBottom();
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        typing.remove();
+        chatBox.insertAdjacentHTML("beforeend", `
+          <div class='msg bot'>
+            <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
+            <div class='bot-content'>${marked.parse(data.reply)}</div>
+            <button class='copy-btn' onclick='copyText(this)'>📋</button>
+          </div>
+        `);
+        scrollToBottom();
+      } catch (err) {
+        typing.remove();
+        chatBox.insertAdjacentHTML("beforeend", `<div class='msg bot error'>⚠ Error: ${err.message}</div>`);
+      }
+    });
+
+    function copyText(btn) {
+      const text = btn.parentElement.innerText.replace("📋", "").trim();
+      navigator.clipboard.writeText(text);
+      btn.textContent = "✅";
+      setTimeout(() => (btn.textContent = "📋"), 1500);
+    }
+
+    function toggleSidebar() {
+      document.getElementById("sidebar").classList.toggle("active");
+      document.getElementById("overlay").classList.toggle("active");
+    }
+    function toggleHub() {
+      const hub = document.getElementById("hub");
+      hub.style.display = hub.style.display === "block" ? "none" : "block";
+    }
+
+    const themeToggle = document.getElementById("theme-toggle");
+    themeToggle.addEventListener("click", () => {
+      const current = document.body.getAttribute("data-theme");
+      const newTheme = current === "dark" ? "light" : "dark";
+      document.body.setAttribute("data-theme", newTheme);
+      themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
+      localStorage.setItem("theme", newTheme);
+    });
+    const savedTheme = localStorage.getItem("theme");
+    document.body.setAttribute("data-theme", savedTheme || "light");
+    themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
+  </script>
 </body>
 </html>
