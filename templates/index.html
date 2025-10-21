@@ -88,9 +88,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      position: sticky;
-      top: 0;
       z-index: 10;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
 
     header h1 {
@@ -141,12 +140,13 @@
       z-index: 998;
     }
 
-    /* Chat area unified */
+    /* Chat area unified look */
     #main-wrapper {
       display: flex;
       flex-direction: column;
       flex: 1;
       overflow: hidden;
+      background: var(--chat-bot-bg);
     }
 
     #chat-box {
@@ -156,6 +156,7 @@
       display: flex;
       flex-direction: column;
       scroll-behavior: smooth;
+      transition: padding-bottom 0.2s ease;
     }
 
     .msg {
@@ -192,7 +193,7 @@
       font-size: 13px;
     }
 
-    /* Text area fixed for mobile */
+    /* Text area (merged look with chat) */
     #chat-form {
       display: flex;
       align-items: flex-end;
@@ -204,12 +205,13 @@
       left: 0;
       right: 0;
       box-sizing: border-box;
+      box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
     }
 
     #message {
       flex: 1;
       padding: 10px;
-      border-radius: 10px;
+      border-radius: 20px;
       border: 1px solid var(--border-color);
       resize: none;
       font-family: inherit;
@@ -217,22 +219,29 @@
       min-height: 40px;
       max-height: 140px;
       line-height: 1.4;
+      background: var(--bg-color);
     }
 
     #chat-form button {
       margin-left: 8px;
-      padding: 8px 12px;
+      padding: 8px 14px;
       background: var(--primary-color);
       color: white;
       border: none;
-      border-radius: 8px;
+      border-radius: 12px;
       font-weight: bold;
       cursor: pointer;
     }
 
     @media (max-width: 600px) {
-      #chat-box { padding-bottom: 120px; }
       #chat-form { padding: 8px; }
+    }
+
+    /* Safe area for mobile keyboards */
+    @supports (env(safe-area-inset-bottom)) {
+      #chat-form {
+        padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+      }
     }
   </style>
 </head>
@@ -313,6 +322,7 @@
         </div>
       `);
     });
+    adjustChatPadding();
     scrollToBottom();
   }
   loadChatHistory();
@@ -320,6 +330,7 @@
   textarea.addEventListener("input", () => {
     textarea.style.height = "auto";
     textarea.style.height = Math.min(textarea.scrollHeight, 140) + "px";
+    adjustChatPadding();
   });
 
   document.getElementById("chat-form").addEventListener("submit", async (e) => {
@@ -331,6 +342,7 @@
     scrollToBottom();
     textarea.value = "";
     textarea.style.height = "40px";
+    adjustChatPadding();
 
     const typing = document.createElement("div");
     typing.className = "msg bot";
@@ -354,6 +366,7 @@
           <button class="copy-btn" onclick="copyText(this)">📋</button>
         </div>
       `);
+      adjustChatPadding();
       scrollToBottom();
     } catch (err) {
       typing.remove();
@@ -379,6 +392,15 @@
     hub.style.display = hub.style.display === "block" ? "none" : "block";
   }
 
+  function adjustChatPadding() {
+    const form = document.getElementById("chat-form");
+    const padding = form.offsetHeight + 20;
+    chatBox.style.paddingBottom = `${padding}px`;
+  }
+
+  window.addEventListener("resize", adjustChatPadding);
+  adjustChatPadding();
+
   const themeToggle = document.getElementById("theme-toggle");
   themeToggle.addEventListener("click", () => {
     const current = document.body.getAttribute("data-theme");
@@ -393,4 +415,3 @@
 </script>
 </body>
 </html>
-
