@@ -234,10 +234,17 @@ def init_db():
             )
         """)
 
-        # ✅ Columns safety-check (idempotent)
-        for col in ["tokens", "referral_tokens", "chat_tokens", "referrals_used", "referral_code"]:
+        # ✅ Columns safety-check (idempotent, fixed types)
+        column_defs = {
+            "tokens": "INTEGER DEFAULT 0",
+            "referral_tokens": "INTEGER DEFAULT 0",
+            "chat_tokens": "INTEGER DEFAULT 0",
+            "referrals_used": "INTEGER DEFAULT 0",
+            "referral_code": "TEXT"
+        }
+        for col, col_type in column_defs.items():
             try:
-                c.execute(f"ALTER TABLE users ADD COLUMN {col} INTEGER DEFAULT 0")
+                c.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
             except sqlite3.OperationalError:
                 pass
             except Exception:
@@ -265,8 +272,6 @@ def init_db():
                 FOREIGN KEY (guest_id) REFERENCES guests(id)
             )
         """)
-
-        # ✅ Ensure guest_id exists (SQLite)
         try:
             c.execute("ALTER TABLE chat_logs ADD COLUMN guest_id INTEGER REFERENCES guests(id)")
         except sqlite3.OperationalError:
@@ -300,8 +305,6 @@ def init_db():
                 FOREIGN KEY(guest_id) REFERENCES guests(id)
             )
         """)
-
-        # ✅ Ensure guest_id exists (SQLite memory)
         try:
             c.execute("ALTER TABLE memory ADD COLUMN guest_id INTEGER REFERENCES guests(id)")
         except sqlite3.OperationalError:
@@ -365,6 +368,8 @@ def init_db():
         # ✅ Assign missing referral codes
         ensure_referral_codes()
 
+        print("[init_db] SQLite database initialized successfully.")
+
     # =====================================
     # ✅ SUPABASE / POSTGRES
     # =====================================
@@ -372,7 +377,11 @@ def init_db():
         if psycopg2 is None:
             raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
 
-        conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
+        db_url = os.getenv("SUPABASE_DB_URL")
+        if not db_url:
+            raise RuntimeError("SUPABASE_DB_URL not set in environment variables.")
+
+        conn = psycopg2.connect(db_url)
         cur = conn.cursor()
 
         # ✅ USERS
@@ -430,8 +439,6 @@ def init_db():
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
-
-        # ✅ Add guest_id column if missing
         cur.execute("ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS guest_id INTEGER REFERENCES guests(id)")
 
         # ✅ System Logs
@@ -457,8 +464,6 @@ def init_db():
             time_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
-
-        # ✅ Add guest_id column if missing
         cur.execute("ALTER TABLE memory ADD COLUMN IF NOT EXISTS guest_id INTEGER REFERENCES guests(id)")
 
         # ✅ Analytics
@@ -514,6 +519,7 @@ def init_db():
         conn.commit()
         cur.close()
         conn.close()
+        print("[init_db] Postgres/Supabase database initialized successfully.")
 
 
 # ---------- SQLite safe ALTER helper ----------
@@ -2479,6 +2485,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
