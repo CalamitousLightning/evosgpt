@@ -171,13 +171,22 @@ else:
         return CompatConnection(_real_sqlite_connect(path, *args, **kwargs), "sqlite")
     sqlite3.connect = sqlite_connect_wrapper
 
-
 # ---------- DB INIT (no summaries, chats stay linked in chat_logs/memory) ----------
-import random, string
+import os
+import random
+import string
+import sqlite3
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
 
 def generate_referral_code():
     """Generate a unique referral code like REF-AB12CD"""
     return "REF-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
 
 def ensure_referral_codes():
     """Assign referral codes to users missing one"""
@@ -198,12 +207,15 @@ def ensure_referral_codes():
 def init_db():
     db_mode = os.getenv("DB_MODE", "sqlite").lower()  # "sqlite" or "supabase"/"postgres"
 
+    # =====================================
+    # ✅ SQLITE
+    # =====================================
     if db_mode == "sqlite":
         os.makedirs("database", exist_ok=True)
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
 
-        # ✅ users table
+        # ✅ USERS
         c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -222,14 +234,14 @@ def init_db():
             )
         """)
 
-        # ✅ EVOSToken columns safety-check
+        # ✅ Columns safety-check (idempotent)
         for col in ["tokens", "referral_tokens", "chat_tokens"]:
             try:
                 c.execute(f"ALTER TABLE users ADD COLUMN {col} INTEGER DEFAULT 0")
             except sqlite3.OperationalError:
                 pass
 
-        # ✅ guests table
+        # ✅ Guests
         c.execute("""
             CREATE TABLE IF NOT EXISTS guests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,7 +250,7 @@ def init_db():
             )
         """)
 
-        # ✅ chat logs
+        # ✅ Chat Logs
         c.execute("""
             CREATE TABLE IF NOT EXISTS chat_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,7 +264,7 @@ def init_db():
             )
         """)
 
-        # ✅ system logs
+        # ✅ System Logs
         c.execute("""
             CREATE TABLE IF NOT EXISTS system_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,7 +276,7 @@ def init_db():
             )
         """)
 
-        # ✅ memory
+        # ✅ Memory
         if os.getenv("RESET_MEMORY", "true").lower() == "true":
             c.execute("DROP TABLE IF EXISTS memory")
         c.execute("""
@@ -281,7 +293,7 @@ def init_db():
             )
         """)
 
-        # ✅ analytics
+        # ✅ Analytics
         c.execute("""
             CREATE TABLE IF NOT EXISTS analytics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -290,7 +302,7 @@ def init_db():
             )
         """)
 
-        # ✅ purchases
+        # ✅ Purchases
         c.execute("""
             CREATE TABLE IF NOT EXISTS purchases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -303,7 +315,7 @@ def init_db():
             )
         """)
 
-        # ✅ coupons
+        # ✅ Coupons
         c.execute("""
             CREATE TABLE IF NOT EXISTS coupons (
                 code TEXT PRIMARY KEY,
@@ -312,7 +324,7 @@ def init_db():
             )
         """)
 
-        # ✅ activity log
+        # ✅ Activity Log
         c.execute("""
             CREATE TABLE IF NOT EXISTS activity_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -324,7 +336,7 @@ def init_db():
             )
         """)
 
-        # ✅ seed coupons
+        # ✅ Seed Coupons
         c.execute("SELECT COUNT(*) FROM coupons")
         if c.fetchone()[0] == 0:
             c.executemany("INSERT INTO coupons (code, tier) VALUES (?, ?)", [
@@ -336,17 +348,20 @@ def init_db():
         conn.commit()
         conn.close()
 
-        # ✅ Assign referral codes automatically (new + old users)
+        # ✅ Assign missing referral codes
         ensure_referral_codes()
-   
-       
+
+    # =====================================
+    # ✅ SUPABASE / POSTGRES
+    # =====================================
     elif db_mode in ("supabase", "postgres"):
         if psycopg2 is None:
             raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
+
         conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
         cur = conn.cursor()
 
-        # ✅ users
+        # ✅ USERS
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -365,19 +380,23 @@ def init_db():
         )
         """)
 
-        # ✅ EVOSToken columns safety check
+        # ✅ Column safety — fixes your Render error
         for col, dtype, default in [
             ("tokens", "INTEGER", 0),
             ("referral_tokens", "INTEGER", 0),
             ("chat_tokens", "INTEGER", 0),
-            ("tier", "TEXT", "'Basic'"),
+            ("referrals_used", "INTEGER", 0),
+            ("referral_code", "TEXT", None),
         ]:
             try:
-                cur.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {dtype} DEFAULT {default}")
+                if default is not None:
+                    cur.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {dtype} DEFAULT {default}")
+                else:
+                    cur.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {dtype}")
             except Exception as e:
                 print(f"[init_db] Column {col} check: {e}")
 
-        # ✅ guests
+        # ✅ Guests
         cur.execute("""
         CREATE TABLE IF NOT EXISTS guests (
             id SERIAL PRIMARY KEY,
@@ -386,7 +405,7 @@ def init_db():
         )
         """)
 
-        # ✅ chat logs
+        # ✅ Chat Logs
         cur.execute("""
         CREATE TABLE IF NOT EXISTS chat_logs (
             id SERIAL PRIMARY KEY,
@@ -398,7 +417,7 @@ def init_db():
         )
         """)
 
-        # ✅ system logs
+        # ✅ System Logs
         cur.execute("""
         CREATE TABLE IF NOT EXISTS system_logs (
             id SERIAL PRIMARY KEY,
@@ -409,7 +428,7 @@ def init_db():
         )
         """)
 
-        # ✅ memory
+        # ✅ Memory
         cur.execute("""
         CREATE TABLE IF NOT EXISTS memory (
             id SERIAL PRIMARY KEY,
@@ -422,7 +441,7 @@ def init_db():
         )
         """)
 
-        # ✅ analytics
+        # ✅ Analytics
         cur.execute("""
         CREATE TABLE IF NOT EXISTS analytics (
             id SERIAL PRIMARY KEY,
@@ -431,7 +450,7 @@ def init_db():
         )
         """)
 
-        # ✅ purchases
+        # ✅ Purchases
         cur.execute("""
         CREATE TABLE IF NOT EXISTS purchases (
             id SERIAL PRIMARY KEY,
@@ -443,7 +462,7 @@ def init_db():
         )
         """)
 
-        # ✅ coupons
+        # ✅ Coupons
         cur.execute("""
         CREATE TABLE IF NOT EXISTS coupons (
             code TEXT PRIMARY KEY,
@@ -452,7 +471,7 @@ def init_db():
         )
         """)
 
-        # ✅ activity log
+        # ✅ Activity Log
         cur.execute("""
         CREATE TABLE IF NOT EXISTS activity_log (
             id SERIAL PRIMARY KEY,
@@ -463,7 +482,7 @@ def init_db():
         )
         """)
 
-        # ✅ seed coupons
+        # ✅ Seed Coupons
         cur.execute("SELECT COUNT(*) FROM coupons")
         if cur.fetchone()[0] == 0:
             cur.executemany("INSERT INTO coupons (code, tier) VALUES (%s, %s)", [
@@ -476,19 +495,13 @@ def init_db():
         cur.close()
         conn.close()
 
-        conn.close()
 
-
-# ---------- small helper for SQLite ALTERs (idempotent) ----------
+# ---------- SQLite safe ALTER helper ----------
 def safe_alters_sqlite(cursor):
-    """
-    Run ALTER TABLE statements safely.
-    Keeps init_db() simple and idempotent for SQLite.
-    """
     alters = [
         "ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'Basic'",
         "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
-        "ALTER TABLE users ADD COLUMN email TEXT",  # optional, since schema already includes it
+        "ALTER TABLE users ADD COLUMN email TEXT",
         "ALTER TABLE users ADD COLUMN referral_code TEXT",
         "ALTER TABLE users ADD COLUMN referrals_used INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN upgrade_expiry DATETIME"
@@ -497,16 +510,13 @@ def safe_alters_sqlite(cursor):
         try:
             cursor.execute(stmt)
         except sqlite3.OperationalError:
-            # already exists or not applicable
             pass
 
-    # ensure a unique index for referral_code
     try:
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
     except sqlite3.OperationalError:
         pass
 
-    # backfill defaults
     try:
         cursor.execute("UPDATE users SET tier = 'Basic' WHERE tier IS NULL")
         cursor.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
@@ -2449,6 +2459,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
