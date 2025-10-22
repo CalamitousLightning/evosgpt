@@ -235,10 +235,12 @@ def init_db():
         """)
 
         # ✅ Columns safety-check (idempotent)
-        for col in ["tokens", "referral_tokens", "chat_tokens"]:
+        for col in ["tokens", "referral_tokens", "chat_tokens", "referrals_used", "referral_code"]:
             try:
                 c.execute(f"ALTER TABLE users ADD COLUMN {col} INTEGER DEFAULT 0")
             except sqlite3.OperationalError:
+                pass
+            except Exception:
                 pass
 
         # ✅ Guests
@@ -263,6 +265,12 @@ def init_db():
                 FOREIGN KEY (guest_id) REFERENCES guests(id)
             )
         """)
+
+        # ✅ Ensure guest_id exists (SQLite)
+        try:
+            c.execute("ALTER TABLE chat_logs ADD COLUMN guest_id INTEGER REFERENCES guests(id)")
+        except sqlite3.OperationalError:
+            pass
 
         # ✅ System Logs
         c.execute("""
@@ -292,6 +300,12 @@ def init_db():
                 FOREIGN KEY(guest_id) REFERENCES guests(id)
             )
         """)
+
+        # ✅ Ensure guest_id exists (SQLite memory)
+        try:
+            c.execute("ALTER TABLE memory ADD COLUMN guest_id INTEGER REFERENCES guests(id)")
+        except sqlite3.OperationalError:
+            pass
 
         # ✅ Analytics
         c.execute("""
@@ -380,7 +394,7 @@ def init_db():
         )
         """)
 
-        # ✅ Column safety — fixes your Render error
+        # ✅ Column safety — fixes Render error
         for col, dtype, default in [
             ("tokens", "INTEGER", 0),
             ("referral_tokens", "INTEGER", 0),
@@ -417,6 +431,9 @@ def init_db():
         )
         """)
 
+        # ✅ Add guest_id column if missing
+        cur.execute("ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS guest_id INTEGER REFERENCES guests(id)")
+
         # ✅ System Logs
         cur.execute("""
         CREATE TABLE IF NOT EXISTS system_logs (
@@ -440,6 +457,9 @@ def init_db():
             time_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+
+        # ✅ Add guest_id column if missing
+        cur.execute("ALTER TABLE memory ADD COLUMN IF NOT EXISTS guest_id INTEGER REFERENCES guests(id)")
 
         # ✅ Analytics
         cur.execute("""
@@ -2459,6 +2479,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
