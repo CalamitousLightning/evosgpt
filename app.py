@@ -172,6 +172,7 @@ else:
     sqlite3.connect = sqlite_connect_wrapper
 
 # ---------- DB INIT (no summaries, chats stay linked in chat_logs/memory) ----------
+# ---------- DB INIT (no summaries, chats stay linked in chat_logs/memory) ----------
 import os
 import random
 import string
@@ -206,6 +207,7 @@ def ensure_referral_codes():
 
 def init_db():
     db_mode = os.getenv("DB_MODE", "sqlite").lower()  # "sqlite" or "supabase"/"postgres"
+    print(f"[init_db] Running in mode: {db_mode}")
 
     # =====================================
     # ✅ SQLITE
@@ -365,9 +367,7 @@ def init_db():
         conn.commit()
         conn.close()
 
-        # ✅ Assign missing referral codes
         ensure_referral_codes()
-
         print("[init_db] SQLite database initialized successfully.")
 
     # =====================================
@@ -403,23 +403,24 @@ def init_db():
         )
         """)
 
-        # ✅ Column safety — fixes Render error
-        for col, dtype, default in [
-            ("tokens", "INTEGER", 0),
-            ("referral_tokens", "INTEGER", 0),
-            ("chat_tokens", "INTEGER", 0),
-            ("referrals_used", "INTEGER", 0),
+        # ✅ Strong Postgres column safety — ensures all columns exist
+        column_fixes = [
+            ("tokens", "INTEGER", "0"),
+            ("referral_tokens", "INTEGER", "0"),
+            ("chat_tokens", "INTEGER", "0"),
+            ("referrals_used", "INTEGER", "0"),
             ("referral_code", "TEXT", None),
-        ]:
+        ]
+        for col, dtype, default in column_fixes:
             try:
                 if default is not None:
                     cur.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {dtype} DEFAULT {default}")
                 else:
                     cur.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {dtype}")
             except Exception as e:
-                print(f"[init_db] Column {col} check: {e}")
+                print(f"[init_db] Postgres column {col} check: {e}")
 
-        # ✅ Guests
+        # ✅ Other tables (unchanged)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS guests (
             id SERIAL PRIMARY KEY,
@@ -428,7 +429,6 @@ def init_db():
         )
         """)
 
-        # ✅ Chat Logs
         cur.execute("""
         CREATE TABLE IF NOT EXISTS chat_logs (
             id SERIAL PRIMARY KEY,
@@ -441,7 +441,6 @@ def init_db():
         """)
         cur.execute("ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS guest_id INTEGER REFERENCES guests(id)")
 
-        # ✅ System Logs
         cur.execute("""
         CREATE TABLE IF NOT EXISTS system_logs (
             id SERIAL PRIMARY KEY,
@@ -452,7 +451,6 @@ def init_db():
         )
         """)
 
-        # ✅ Memory
         cur.execute("""
         CREATE TABLE IF NOT EXISTS memory (
             id SERIAL PRIMARY KEY,
@@ -466,7 +464,6 @@ def init_db():
         """)
         cur.execute("ALTER TABLE memory ADD COLUMN IF NOT EXISTS guest_id INTEGER REFERENCES guests(id)")
 
-        # ✅ Analytics
         cur.execute("""
         CREATE TABLE IF NOT EXISTS analytics (
             id SERIAL PRIMARY KEY,
@@ -475,7 +472,6 @@ def init_db():
         )
         """)
 
-        # ✅ Purchases
         cur.execute("""
         CREATE TABLE IF NOT EXISTS purchases (
             id SERIAL PRIMARY KEY,
@@ -487,7 +483,6 @@ def init_db():
         )
         """)
 
-        # ✅ Coupons
         cur.execute("""
         CREATE TABLE IF NOT EXISTS coupons (
             code TEXT PRIMARY KEY,
@@ -496,7 +491,6 @@ def init_db():
         )
         """)
 
-        # ✅ Activity Log
         cur.execute("""
         CREATE TABLE IF NOT EXISTS activity_log (
             id SERIAL PRIMARY KEY,
@@ -2486,6 +2480,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
