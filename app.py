@@ -1641,7 +1641,7 @@ def analytics_dashboard():
 # ---------- AUTH ROUTES ----------
 import random
 
-@app.route("/login", methods=["GET", "POST"])
+@@app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form["username"].strip()
@@ -1652,64 +1652,63 @@ def login():
         c.execute("SELECT id, password, tier, status FROM users WHERE username = ?", (username,))
         row = c.fetchone()
 
-        if row and check_password_hash(row[1], password):
-            user_id, hashed_pw, tier, status = row
+        if row:
+            user_id, hashed_pw, tier, status = row  # ✅ correct unpacking
 
-            # ❌ Suspended account
-            if status != "active":
+            if check_password_hash(hashed_pw, password):  # ✅ correct check
+                # ❌ Suspended account
+                if status != "active":
+                    conn.close()
+                    flash("⚠ Your account is suspended.")
+                    return render_template("login.html")
+
+                # ✅ Set session
+                session["user_id"] = user_id
+                session["username"] = username
+                session["tier"] = tier
+
+                # ✅ Merge guest chats into this account
+                guest_id = session.pop("guest_id", None)
+                if guest_id:
+                    try:
+                        c.execute("UPDATE memory SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (user_id, guest_id))
+                        c.execute("UPDATE chat_logs SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (user_id, guest_id))
+                        conn.commit()
+                    except Exception as e:
+                        log_suspicious("GuestReassignFail", str(e))
+
                 conn.close()
-                flash("⚠ Your account is suspended.")
-                return render_template("login.html")
 
-            # ✅ Set session
-            session["user_id"] = user_id
-            session["username"] = username
-            session["tier"] = tier
+                # 🎁 Promo messages by tier
+                promos = {
+                    "Basic": [
+                        "🚀 Upgrade to Core for smarter long-term memory!",
+                        "⚡ Pro gives you faster responses & analytics access.",
+                        "👑 King unlocks admin tools & premium features."
+                    ],
+                    "Core": [
+                        "⚡ Upgrade to Pro for lightning-fast responses!",
+                        "👑 King tier gives you the dashboard & unlimited storage."
+                    ],
+                    "Pro": [
+                        "👑 Upgrade to King for full control & admin dashboard!",
+                        "🔥 King tier = ultimate experience, no limits."
+                    ],
+                    "King": [
+                        "👑 You’re a King. Founder tier unlocks secret tools…",
+                        "💡 Stay tuned — Founder mode is coming."
+                    ],
+                    "Founder": [
+                        "🔥 Founder mode active. You already have everything.",
+                        "💎 Thank you for being a Founder."
+                    ]
+                }
+                session["popup_msg"] = random.choice(promos.get(tier, ["💡 Ask EVOSGPT anything, anytime!"]))
 
-            # ✅ Merge guest chats into this account
-            guest_id = session.pop("guest_id", None)
-            if guest_id:
-                try:
-                    # Move memory
-                    c.execute("UPDATE memory SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (user_id, guest_id))
-                    # Move chat logs
-                    c.execute("UPDATE chat_logs SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (user_id, guest_id))
-                    conn.commit()
-                except Exception as e:
-                    log_suspicious("GuestReassignFail", str(e))
+                # ✅ Log login
+                log_action(user_id, "login", f"User {username} logged in")
 
-            conn.close()
-
-            # 🎁 Promo messages by tier
-            promos = {
-                "Basic": [
-                    "🚀 Upgrade to Core for smarter long-term memory!",
-                    "⚡ Pro gives you faster responses & analytics access.",
-                    "👑 King unlocks admin tools & premium features."
-                ],
-                "Core": [
-                    "⚡ Upgrade to Pro for lightning-fast responses!",
-                    "👑 King tier gives you the dashboard & unlimited storage."
-                ],
-                "Pro": [
-                    "👑 Upgrade to King for full control & admin dashboard!",
-                    "🔥 King tier = ultimate experience, no limits."
-                ],
-                "King": [
-                    "👑 You’re a King. Founder tier unlocks secret tools…",
-                    "💡 Stay tuned — Founder mode is coming."
-                ],
-                "Founder": [
-                    "🔥 Founder mode active. You already have everything.",
-                    "💎 Thank you for being a Founder."
-                ]
-            }
-            session["popup_msg"] = random.choice(promos.get(tier, ["💡 Ask EVOSGPT anything, anytime!"]))
-
-            # ✅ Log login
-            log_action(user_id, "login", f"User {username} logged in")
-
-            return redirect(url_for("index"))
+                return redirect(url_for("index"))
 
         conn.close()
         flash("❌ Invalid username or password.")
@@ -2210,6 +2209,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
