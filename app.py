@@ -1641,7 +1641,7 @@ def analytics_dashboard():
 # ---------- AUTH ROUTES ----------
 import random
 
-@@app.route("/login", methods=["GET", "POST"])
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         username = request.form["username"].strip()
@@ -2220,6 +2220,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
