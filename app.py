@@ -1755,24 +1755,32 @@ def register():
 
             # 🔹 Assign tier (first 100 = Pro, rest Basic)
             c.execute("SELECT COUNT(*) FROM users")
-            total_users = c.fetchone()[0]
+            total_users = c.fetchone()[0] or 0
             tier = "Pro" if total_users < 100 else "Basic"
 
-            # 🔹 Generate referral code for this new user
+            # 🔹 Generate referral code
             referral_code = generate_referral_code()
 
-            # 🔹 Insert new user
-            c.execute("""
-                INSERT INTO users (username, email, password, tier, referral_code)
-                VALUES (?, ?, ?, ?, ?)
-            """, (username, email, hashed_pw, tier, referral_code))
-            new_user_id = c.lastrowid
+            # ✅ Safe insert into SQLite
+            try:
+                c.execute("""
+                    INSERT INTO users (username, email, password, tier, referral_code)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (username, email, hashed_pw, tier, referral_code))
+                new_user_id = c.lastrowid
+                conn.commit()
+            except sqlite3.IntegrityError:
+                conn.close()
+                return render_template("register.html", msg="❌ Username or email already exists.")
 
             # 🔹 Handle referral usage if "?ref=" is in URL
             referrer_code = request.args.get("ref")
             if referrer_code:
-                c.execute("UPDATE users SET referrals_used = referrals_used + 1 WHERE referral_code = ?", (referrer_code,))
-                conn.commit()
+                try:
+                    c.execute("UPDATE users SET referrals_used = referrals_used + 1 WHERE referral_code = ?", (referrer_code,))
+                    conn.commit()
+                except Exception as e:
+                    print(f"[WARN] Failed to update referrer: {e}")
 
             # 🔹 Merge guest chats into this new user account
             guest_id = session.pop("guest_id", None)
@@ -1784,29 +1792,32 @@ def register():
                 except Exception as e:
                     log_suspicious("GuestAssignFail", str(e))
 
-            conn.commit()
             conn.close()
 
-            # 🔹 Try to sync with Supabase (safe fail)
+            # 🔹 Try to sync with Supabase (non-fatal)
             try:
-                supabase.table("users").insert({
-                    "username": username,
-                    "email": email,
-                    "tier": tier,
-                    "referral_code": referral_code
-                }).execute()
+                if "supabase" in globals():
+                    supabase.table("users").insert({
+                        "username": username,
+                        "email": email,
+                        "tier": tier,
+                        "referral_code": referral_code
+                    }).execute()
+                else:
+                    print("[WARN] Supabase not initialized — skipping sync.")
             except Exception as e:
                 print(f"[WARN] Failed to sync user to Supabase: {e}")
 
-            # ✅ Redirect to login instead of auto-login
+            # ✅ Redirect to login after successful registration
+            flash("✅ Account created successfully! Please log in.", "success")
             return redirect(url_for("login"))
 
-        except sqlite3.IntegrityError:
-            return render_template("register.html", msg="❌ Username or email already exists.")
         except Exception as e:
+            print(f"[ERROR] Register crashed: {e}")
             return render_template("register.html", msg=f"⚠ Error: {e}")
 
     return render_template("register.html")
+
 
 @app.route("/logout")
 def logout():
@@ -2209,6 +2220,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
