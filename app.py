@@ -1799,11 +1799,8 @@ def register():
             except Exception as e:
                 print(f"[WARN] Failed to sync user to Supabase: {e}")
 
-            # 🔹 Auto-login user after register
-            session["user_id"] = new_user_id
-            session["tier"] = tier
-
-            return redirect(url_for("chat"))
+            # ✅ Redirect to login instead of auto-login
+            return redirect(url_for("login"))
 
         except sqlite3.IntegrityError:
             return render_template("register.html", msg="❌ Username or email already exists.")
@@ -2213,6 +2210,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
