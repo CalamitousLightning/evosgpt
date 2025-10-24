@@ -1880,6 +1880,7 @@ def register():
         password = request.form["password"]
         agree_terms = request.form.get("agree_terms")
 
+        # ✅ Validation
         if not username or not password or not email:
             return render_template("register.html", msg="Username, email, and password required.")
         if not agree_terms:
@@ -1896,18 +1897,21 @@ def register():
             conn = get_db_connection()
             c = conn.cursor()
 
-            # Determine tier (first 100 users = Pro)
+            # ✅ Determine tier (first 100 users = Pro)
             c.execute("SELECT COUNT(*) FROM users")
-            total_users = c.fetchone()[0] if c.fetchone() else 0
+            row = c.fetchone()
+            total_users = row[0] if row else 0
             tier = "Pro" if total_users < 100 else "Basic"
             referral_code = generate_referral_code()
 
+            # 🎁 Starter tokens based on tier
             starter = get_tier_rewards(tier)["starter"]
 
-            # Different parameter placeholders for DB type
+            # ✅ Choose SQL placeholder based on DB type
             db_mode = os.getenv("DB_MODE", "sqlite").lower()
             placeholder = "?" if db_mode == "sqlite" else "%s"
 
+            # ✅ Insert new user
             query = f"""
                 INSERT INTO users (username, email, password, tier, referral_code, tokens, chat_tokens, referral_tokens)
                 VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 0, 0)
@@ -1915,7 +1919,7 @@ def register():
             c.execute(query, (username, email, hashed_pw, tier, referral_code, starter))
             new_user_id = c.lastrowid if db_mode == "sqlite" else None
 
-            # Handle referrer (?ref=REF-XXXXXX)
+            # ✅ Handle referrer (?ref=REF-XXXXXX)
             referrer_code = request.args.get("ref")
             if referrer_code:
                 reward_referrer(referrer_code)
@@ -2467,6 +2471,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
