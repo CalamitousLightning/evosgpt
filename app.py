@@ -68,6 +68,50 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
 
+app = Flask(__name__)
+
+# ==============================================
+# 🛠 Auto DB Fix for Missing Columns (Render Safe)
+# ==============================================
+import os
+import sqlite3
+import psycopg2
+
+def auto_fix_db():
+    try:
+        db_mode = os.getenv("DB_MODE", "sqlite").lower()
+        print(f"[DB] Auto-fix running for mode: {db_mode}")
+
+        if db_mode == "sqlite":
+            conn = sqlite3.connect("database/memory.db")
+        else:
+            conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
+
+        c = conn.cursor()
+
+        # 🧩 Fix users table
+        c.execute("""
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS tokens INTEGER DEFAULT 0;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_tokens INTEGER DEFAULT 0;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_tokens INTEGER DEFAULT 0;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS referrals_used INTEGER DEFAULT 0;
+        """)
+
+        # 🧠 Fix memory table
+        c.execute("""
+        ALTER TABLE memory ADD COLUMN IF NOT EXISTS guest_id TEXT;
+        ALTER TABLE memory ADD COLUMN IF NOT EXISTS user_id INTEGER;
+        """)
+
+        conn.commit()
+        conn.close()
+        print("[DB] ✅ Tables updated successfully")
+
+    except Exception as e:
+        print(f"[DB] ⚠ Auto-fix failed: {e}")
+
+# Run auto-fix once at startup
+auto_fix_db()
 
 # ---------- GLOBAL LOGGER ----------
 def log_action(user_id, action, details="N/A"):
@@ -2471,6 +2515,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
