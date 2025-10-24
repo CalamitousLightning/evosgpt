@@ -1787,34 +1787,220 @@ def analytics_dashboard():
                            system_messages=system_messages)
 
 # ---------- AUTH ROUTES ----------
+# ==============================================
+# 🧠 Database Connection Helper
+# Works for both SQLite (local) and Postgres (Render/Supabase)
+# ==============================================
+import os
+import sqlite3
+import random
+import re
+import uuid
+import string
+from flask import request, render_template, redirect, url_for, session, flash
+from werkzeug.security import generate_password_hash, check_password_hash
+
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
+
+def get_db_connection():
+    """Return correct DB connection depending on environment (DB_MODE)."""
+    db_mode = os.getenv("DB_MODE", "sqlite").lower()
+
+    if db_mode == "sqlite":
+        return sqlite3.connect("database/memory.db")
+
+    elif db_mode in ("postgres", "supabase"):
+        db_url = os.getenv("SUPABASE_DB_URL")
+        if not db_url:
+            raise RuntimeError("SUPABASE_DB_URL not configured.")
+        return psycopg2.connect(db_url, sslmode="require")
+
+    else:
+        raise RuntimeError(f"Unsupported DB_MODE: {db_mode}")
+
+
+# ==============================================
+# 🧩 Utility Functions
+# ==============================================
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+ALLOWED_DOMAINS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com"}
+
+
+def generate_referral_code():
+    return "REF-" + "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+
+def get_tier_rewards(tier):
+    """Returns tier-based EVOSToken rewards."""
+    rewards = {
+        "Basic": {"starter": 5, "per_chat": 1, "per_referral": 2},
+        "Core":  {"starter": 15, "per_chat": 2, "per_referral": 5},
+        "Pro":   {"starter": 30, "per_chat": 5, "per_referral": 10},
+        "King":  {"starter": 50, "per_chat": 10, "per_referral": 20},
+    }
+    return rewards.get(tier, rewards["Basic"])
+
+
+def reward_referrer(ref_code):
+    """Give referrer tokens based on their tier."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("SELECT id, tier FROM users WHERE referral_code = %s", (ref_code,))
+        row = c.fetchone()
+        if row:
+            ref_id, ref_tier = row
+            reward = get_tier_rewards(ref_tier)["per_referral"]
+            c.execute("""
+                UPDATE users
+                SET tokens = tokens + %s,
+                    referral_tokens = referral_tokens + %s,
+                    referrals_used = referrals_used + 1
+                WHERE id = %s
+            """, (reward, reward, ref_id))
+            conn.commit()
+    except Exception as e:
+        print(f"[WARN] reward_referrer error: {e}")
+    finally:
+        conn.close()
+
+
+# ==============================================
+# 🧑‍💻 Register
+# ==============================================
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"].strip()
+        email = request.form.get("email", "").strip()
+        password = request.form["password"]
+        agree_terms = request.form.get("agree_terms")
+
+        if not username or not password or not email:
+            return render_template("register.html", msg="Username, email, and password required.")
+        if not agree_terms:
+            return render_template("register.html", msg="Please agree to the Terms & Privacy Policy before continuing.")
+        if not EMAIL_REGEX.match(email):
+            return render_template("register.html", msg="Invalid email format.")
+        domain = email.split("@")[-1].lower()
+        if domain not in ALLOWED_DOMAINS:
+            return render_template("register.html", msg="Use Gmail, Yahoo, Outlook, or Hotmail.")
+
+        hashed_pw = generate_password_hash(password)
+
+        try:
+            conn = get_db_connection()
+            c = conn.cursor()
+
+            # Determine tier (first 100 users = Pro)
+            c.execute("SELECT COUNT(*) FROM users")
+            total_users = c.fetchone()[0] if c.fetchone() else 0
+            tier = "Pro" if total_users < 100 else "Basic"
+            referral_code = generate_referral_code()
+
+            starter = get_tier_rewards(tier)["starter"]
+
+            # Different parameter placeholders for DB type
+            db_mode = os.getenv("DB_MODE", "sqlite").lower()
+            placeholder = "?" if db_mode == "sqlite" else "%s"
+
+            query = f"""
+                INSERT INTO users (username, email, password, tier, referral_code, tokens, chat_tokens, referral_tokens)
+                VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, 0, 0)
+            """
+            c.execute(query, (username, email, hashed_pw, tier, referral_code, starter))
+            new_user_id = c.lastrowid if db_mode == "sqlite" else None
+
+            # Handle referrer (?ref=REF-XXXXXX)
+            referrer_code = request.args.get("ref")
+            if referrer_code:
+                reward_referrer(referrer_code)
+
+            conn.commit()
+            conn.close()
+
+            flash(f"✅ Account created! You’ve received {starter} EVOSTokens. Please log in.", "success")
+            return redirect(url_for("login"))
+
+        except Exception as e:
+            print(f"[ERROR] Register failed: {e}")
+            return render_template("register.html", msg=f"⚠ Error: {e}")
+
+    return render_template("register.html")
+
+
+# ==============================================
+# 🔑 Login
+# ==============================================
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"].strip()
+        password = request.form["password"].strip()
+
+        conn = get_db_connection()
+        c = conn.cursor()
+        db_mode = os.getenv("DB_MODE", "sqlite").lower()
+        placeholder = "?" if db_mode == "sqlite" else "%s"
+
+        c.execute(f"SELECT id, password, tier, status FROM users WHERE username = {placeholder}", (username,))
+        row = c.fetchone()
+
+        if row and check_password_hash(row[1], password):
+            user_id, _, tier, status = row
+            if status != "active":
+                conn.close()
+                flash("⚠ Your account is suspended.")
+                return render_template("login.html")
+
+            session["user_id"] = user_id
+            session["username"] = username
+            session["tier"] = tier
+
+            conn.close()
+            return redirect(url_for("index"))
+
+        conn.close()
+        flash("❌ Invalid username or password.")
+        return render_template("login.html")
+
+    return render_template("login.html")
+
+
+# ==============================================
+# 💰 EVOSToken Leaderboard
+# ==============================================
 @app.route("/evostoken")
 def evostoken():
     if "user_id" not in session:
         return redirect(url_for("login"))
 
     uid = session["user_id"]
-    conn = sqlite3.connect("database/memory.db")
+    conn = get_db_connection()
     c = conn.cursor()
+    db_mode = os.getenv("DB_MODE", "sqlite").lower()
+    placeholder = "?" if db_mode == "sqlite" else "%s"
 
     try:
-        c.execute("""
+        c.execute(f"""
             SELECT username, tier, tokens, chat_tokens, referral_tokens
-            FROM users WHERE id = ?
+            FROM users WHERE id = {placeholder}
         """, (uid,))
         row = c.fetchone()
 
         if row:
             username, tier, tokens, chat_tokens, referral_tokens = row
-            tokens = tokens or 0
-            chat_tokens = chat_tokens or 0
-            referral_tokens = referral_tokens or 0
         else:
             username, tier, tokens, chat_tokens, referral_tokens = "?", "Basic", 0, 0, 0
 
-        total_tokens = tokens + chat_tokens + referral_tokens
+        total_tokens = (tokens or 0) + (chat_tokens or 0) + (referral_tokens or 0)
 
         c.execute("""
-            SELECT username, tier, tokens + chat_tokens + referral_tokens AS total
+            SELECT username, tier, (tokens + chat_tokens + referral_tokens) AS total
             FROM users
             ORDER BY total DESC
             LIMIT 20
@@ -1825,7 +2011,6 @@ def evostoken():
         print("🔥 Error in /evostoken:", e)
         leaderboard = []
         username, tier, tokens, chat_tokens, referral_tokens, total_tokens = "?", "Basic", 0, 0, 0, 0
-
     finally:
         conn.close()
 
@@ -1841,221 +2026,23 @@ def evostoken():
     )
 
 
-
-
-import random
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form["username"].strip()
-        password = request.form["password"].strip()
-
-        conn = sqlite3.connect("database/memory.db")
-        c = conn.cursor()
-        c.execute("SELECT id, password, tier, status FROM users WHERE username = ?", (username,))
-        row = c.fetchone()
-
-        if row and check_password_hash(row[1], password):
-            user_id, hashed_pw, tier, status = row
-
-            # ❌ Suspended account
-            if status != "active":
-                conn.close()
-                flash("⚠ Your account is suspended.")
-                return render_template("login.html")
-
-            # ✅ Set session
-            session["user_id"] = user_id
-            session["username"] = username
-            session["tier"] = tier
-
-            # ✅ Merge guest chats into this account
-            guest_id = session.pop("guest_id", None)
-            if guest_id:
-                try:
-                    # Move memory
-                    c.execute("UPDATE memory SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (user_id, guest_id))
-                    # Move chat logs
-                    c.execute("UPDATE chat_logs SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (user_id, guest_id))
-                    conn.commit()
-                except Exception as e:
-                    log_suspicious("GuestReassignFail", str(e))
-
-            conn.close()
-
-            # 🎁 Promo messages by tier
-            promos = {
-                "Basic": [
-                    "🚀 Upgrade to Core for smarter long-term memory!",
-                    "⚡ Pro gives you faster responses & analytics access.",
-                    "👑 King unlocks admin tools & premium features."
-                ],
-                "Core": [
-                    "⚡ Upgrade to Pro for lightning-fast responses!",
-                    "👑 King tier gives you the dashboard & unlimited storage."
-                ],
-                "Pro": [
-                    "👑 Upgrade to King for full control & admin dashboard!",
-                    "🔥 King tier = ultimate experience, no limits."
-                ],
-                "King": [
-                    "👑 You’re a King. Founder tier unlocks secret tools…",
-                    "💡 Stay tuned — Founder mode is coming."
-                ],
-                "Founder": [
-                    "🔥 Founder mode active. You already have everything.",
-                    "💎 Thank you for being a Founder."
-                ]
-            }
-            session["popup_msg"] = random.choice(promos.get(tier, ["💡 Ask EVOSGPT anything, anytime!"]))
-
-            # ✅ Log login
-            log_action(user_id, "login", f"User {username} logged in")
-
-            return redirect(url_for("index"))
-
-        conn.close()
-        flash("❌ Invalid username or password.")
-        return render_template("login.html")
-
-    return render_template("login.html")
-
-
-import re
-import uuid
-import random, string
-import sqlite3
-from flask import request, render_template, redirect, url_for, session, flash
-from werkzeug.security import generate_password_hash
-
-EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-ALLOWED_DOMAINS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com"}
-
-def get_tier_rewards(tier):
-    """Returns tier-based EVOSToken rewards."""
-    rewards = {
-        "Basic": {"starter": 5, "per_chat": 1, "per_referral": 2},
-        "Core":  {"starter": 15, "per_chat": 2, "per_referral": 5},
-        "Pro":   {"starter": 30, "per_chat": 5, "per_referral": 10},
-        "King":  {"starter": 50, "per_chat": 10, "per_referral": 20},
-    }
-    return rewards.get(tier, rewards["Basic"])
-
-
-def reward_referrer(ref_code):
-    """Give referrer tokens based on their tier."""
-    conn = sqlite3.connect("database/memory.db")
-    c = conn.cursor()
-    try:
-        c.execute("SELECT id, tier FROM users WHERE referral_code = ?", (ref_code,))
-        row = c.fetchone()
-        if row:
-            ref_id, ref_tier = row
-            reward = get_tier_rewards(ref_tier)["per_referral"]
-            c.execute("""
-                UPDATE users
-                SET tokens = tokens + ?, referral_tokens = referral_tokens + ?, referrals_used = referrals_used + 1
-                WHERE id = ?
-            """, (reward, reward, ref_id))
-            conn.commit()
-    finally:
-        conn.close()
-
-
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    if request.method == "POST":
-        username = request.form["username"].strip()
-        email = request.form.get("email", "").strip()
-        password = request.form["password"]
-        agree_terms = request.form.get("agree_terms")
-
-        # ✅ Validation
-        if not username or not password or not email:
-            return render_template("register.html", msg="Username, email, and password required.")
-        if not agree_terms:
-            return render_template("register.html", msg="Please agree to the Terms & Privacy Policy before continuing.")
-        if not EMAIL_REGEX.match(email):
-            return render_template("register.html", msg="Invalid email format.")
-        domain = email.split("@")[-1].lower()
-        if domain not in ALLOWED_DOMAINS:
-            return render_template("register.html", msg="Use Gmail, Yahoo, Outlook, or Hotmail.")
-
-        hashed_pw = generate_password_hash(password)
-
-        try:
-            conn = sqlite3.connect("database/memory.db")
-            c = conn.cursor()
-
-            # 🏷 Determine tier (first 100 users = Pro)
-            c.execute("SELECT COUNT(*) FROM users")
-            total_users = c.fetchone()[0]
-            tier = "Pro" if total_users < 100 else "Basic"
-            referral_code = generate_referral_code()
-
-            # 🎁 Starter tokens based on tier
-            starter = get_tier_rewards(tier)["starter"]
-
-            c.execute("""
-                INSERT INTO users (username, email, password, tier, referral_code, tokens, chat_tokens, referral_tokens)
-                VALUES (?, ?, ?, ?, ?, ?, 0, 0)
-            """, (username, email, hashed_pw, tier, referral_code, starter))
-            new_user_id = c.lastrowid
-
-            # 👥 Handle referrer (if ?ref=REF-XXXXXX)
-            referrer_code = request.args.get("ref")
-            if referrer_code:
-                reward_referrer(referrer_code)
-
-            # 🧩 Guest migration
-            guest_id = session.pop("guest_id", None)
-            if guest_id:
-                try:
-                    c.execute("UPDATE memory SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (new_user_id, guest_id))
-                    c.execute("UPDATE chat_logs SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (new_user_id, guest_id))
-                    conn.commit()
-                except Exception as e:
-                    log_suspicious("GuestAssignFail", str(e))
-
-            conn.commit()
-            conn.close()
-
-            # ☁ Optional Supabase sync
-            try:
-                supabase.table("users").insert({
-                    "username": username,
-                    "email": email,
-                    "tier": tier,
-                    "referral_code": referral_code,
-                    "tokens": starter
-                }).execute()
-            except Exception as e:
-                print(f"[WARN] Supabase sync failed: {e}")
-
-            flash(f"✅ Account created! You’ve received {starter} EVOSTokens. Please log in.", "success")
-            return redirect(url_for("login"))
-
-        except sqlite3.IntegrityError:
-            return render_template("register.html", msg="❌ Username or email already exists.")
-        except Exception as e:
-            return render_template("register.html", msg=f"⚠ Error: {e}")
-
-    return render_template("register.html")
-
+# ==============================================
+# 🤝 Referral Page
+# ==============================================
 @app.route("/referral")
 def referral():
-    # ✅ Only logged-in users can access
     if "user_id" not in session:
         flash("Please log in to access your referral link.", "warning")
         return redirect(url_for("login"))
 
     user_id = session["user_id"]
+    conn = get_db_connection()
+    c = conn.cursor()
+    db_mode = os.getenv("DB_MODE", "sqlite").lower()
+    placeholder = "?" if db_mode == "sqlite" else "%s"
 
     try:
-        conn = sqlite3.connect("database/memory.db")
-        c = conn.cursor()
-        c.execute("SELECT username, referral_code, referrals_used, referral_tokens FROM users WHERE id = ?", (user_id,))
+        c.execute(f"SELECT username, referral_code, referrals_used, referral_tokens FROM users WHERE id = {placeholder}", (user_id,))
         row = c.fetchone()
         conn.close()
 
@@ -2480,6 +2467,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
