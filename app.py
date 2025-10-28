@@ -1827,41 +1827,6 @@ def logout():
     flash("You have been logged out.")
     return redirect(url_for("login"))
 
-@app.route("/get_messages")
-def get_messages():
-    """Fetch saved chat messages for the logged-in user or guest."""
-    user_id = session.get("user_id")
-    guest_id = session.get("guest_id")
-
-    conn = sqlite3.connect("database/memory.db")
-    c = conn.cursor()
-
-    if user_id:
-        # Fetch messages for logged-in users
-        c.execute(
-            "SELECT role, content, timestamp FROM memory WHERE user_id = ? ORDER BY id ASC",
-            (user_id,),
-        )
-    elif guest_id:
-        # Fetch messages for guests
-        c.execute(
-            "SELECT role, content, timestamp FROM memory WHERE guest_id = ? ORDER BY id ASC",
-            (guest_id,),
-        )
-    else:
-        # No session found — return empty chat history
-        return jsonify([])
-
-    rows = c.fetchall()
-    conn.close()
-
-    # Convert DB rows to list of message dicts
-    messages = [
-        {"role": r[0], "content": r[1], "timestamp": r[2]}
-        for r in rows
-    ]
-
-    return jsonify(messages)
 
 
 import requests, json, time, sqlite3, os
@@ -2256,6 +2221,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
