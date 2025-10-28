@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="EVOSGPT — Built for You, Designed to Evolve. Smart, Secure, and Evolving Chat AI." />
   <title>EVOSGPT</title>
 
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/evosgpt-icon.png') }}">
@@ -88,8 +89,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      z-index: 10;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      z-index: 10;
     }
 
     header h1 {
@@ -194,7 +195,6 @@
       font-size: 13px;
     }
 
-    /* Chat Form */
     #chat-form {
       display: flex;
       align-items: flex-end;
@@ -311,11 +311,7 @@
 
     function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
 
-    // ---- Persistent Chat Storage ---- //
-    function saveChat() {
-      localStorage.setItem("evos_chat_history", chatBox.innerHTML);
-    }
-
+    function saveChat() { localStorage.setItem("evos_chat_history", chatBox.innerHTML); }
     function loadChat() {
       const saved = localStorage.getItem("evos_chat_history");
       if (saved) {
@@ -324,35 +320,25 @@
         scrollToBottom();
       }
     }
-
     function clearChat() {
       localStorage.removeItem("evos_chat_history");
       chatBox.innerHTML = "";
     }
 
-    // Load chat on start
     loadChat();
 
-    // ---- Chat Submit ---- //
     document.getElementById("chat-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = textarea.value.trim();
       if (!text) return;
 
       chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${text}</div>`);
-      saveChat();
-      scrollToBottom();
-
-      textarea.value = "";
-      textarea.style.height = "40px";
-      adjustChatPadding();
+      saveChat(); scrollToBottom();
+      textarea.value = ""; textarea.style.height = "40px"; adjustChatPadding();
 
       const typing = document.createElement("div");
-      typing.className = "msg bot";
-      typing.id = "typing-bubble";
-      typing.innerText = "EVOSGPT is typing...";
-      chatBox.appendChild(typing);
-      scrollToBottom();
+      typing.className = "msg bot"; typing.id = "typing-bubble"; typing.innerText = "EVOSGPT is typing...";
+      chatBox.appendChild(typing); scrollToBottom();
 
       try {
         const res = await fetch("/chat", {
@@ -370,9 +356,7 @@
             <button class="copy-btn" onclick="copyText(this)">📋</button>
           </div>
         `);
-        saveChat();
-        adjustChatPadding();
-        scrollToBottom();
+        saveChat(); adjustChatPadding(); scrollToBottom();
       } catch (err) {
         typing.remove();
         chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot error">⚠ Error: ${err.message}</div>`);
@@ -380,7 +364,6 @@
       }
     });
 
-    // ---- Enter to Send (Desktop) ---- //
     textarea.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 768) {
         e.preventDefault();
@@ -408,19 +391,8 @@
 
     function adjustChatPadding() {
       const form = document.getElementById("chat-form");
-      const padding = form.offsetHeight + 20;
-      chatBox.style.paddingBottom = `${padding}px`;
+      chatBox.style.paddingBottom = `${form.offsetHeight + 20}px`;
     }
-
-    // Prevent layout jump on mobile keyboard
-    window.addEventListener("focusin", () => {
-      document.body.style.height = "100vh";
-      scrollToBottom();
-    });
-    window.addEventListener("focusout", () => {
-      document.body.style.height = "";
-      adjustChatPadding();
-    });
 
     window.addEventListener("resize", adjustChatPadding);
     adjustChatPadding();
@@ -433,6 +405,7 @@
       themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
       localStorage.setItem("theme", newTheme);
     });
+
     const savedTheme = localStorage.getItem("theme");
     document.body.setAttribute("data-theme", savedTheme || "light");
     themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
