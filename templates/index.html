@@ -38,7 +38,6 @@
       font-family: "Poppins", Arial, sans-serif;
       background: var(--bg-color);
       color: var(--text-color);
-      overscroll-behavior: contain;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -141,7 +140,7 @@
       z-index: 998;
     }
 
-    /* Main Chat Layout */
+    /* Chat Layout */
     #main-wrapper {
       display: flex;
       flex-direction: column;
@@ -211,25 +210,23 @@
       z-index: 50;
     }
 
-  #message {
-  flex: 1;
-  padding: 10px;
-  border-radius: 20px;
-  border: 1px solid var(--border-color);
-  resize: none;
-  font-family: inherit;
-  overflow-y: auto;
-  min-height: 40px;
-  max-height: 140px;
-  line-height: 1.4;
-  background: var(--chat-bot-bg);
-  color: var(--chat-bot-text);
-  font-size: 16px; /* Prevent zoom on mobile */
-  -webkit-text-size-adjust: 100%;
-  transition: background 0.3s, color 0.3s;
-  }
+    #message {
+      flex: 1;
+      padding: 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+      resize: none;
+      font-family: inherit;
+      overflow-y: auto;
+      min-height: 40px;
+      max-height: 140px;
+      line-height: 1.4;
+      background: var(--chat-bot-bg);
+      color: var(--chat-bot-text);
+      font-size: 16px;
+      transition: background 0.3s, color 0.3s;
+    }
 
-   
     #chat-form button {
       margin-left: 8px;
       padding: 8px 14px;
@@ -239,7 +236,6 @@
       border-radius: 12px;
       font-weight: bold;
       cursor: pointer;
-      flex-shrink: 0;
     }
 
     @media (max-width: 600px) {
@@ -247,9 +243,7 @@
     }
 
     @supports (env(safe-area-inset-bottom)) {
-      #chat-form {
-        padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
-      }
+      #chat-form { padding-bottom: calc(env(safe-area-inset-bottom) + 8px); }
     }
   </style>
 </head>
@@ -270,6 +264,7 @@
       {% if tier in ["King", "Founder"] %}
         <a href="/admin">🛠 Admin</a>
       {% endif %}
+      <a href="javascript:void(0)" onclick="clearChat()">🧹 Clear Chat</a>
       {% if not logged_in %}
         <a href="/login">🔑 Login</a>
         <a href="/register">📝 Register</a>
@@ -310,127 +305,137 @@
     <button type="submit">Send</button>
   </form>
 
-<script>
-  const chatBox = document.getElementById("chat-box");
-  const textarea = document.getElementById("message");
+  <script>
+    const chatBox = document.getElementById("chat-box");
+    const textarea = document.getElementById("message");
 
-  function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
+    function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
 
-  async function loadChatHistory() {
-    const res = await fetch("/get_messages");
-    const data = await res.json();
-    chatBox.innerHTML = "";
-    data.forEach(msg => {
-      chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${msg.user}</div>`);
-      chatBox.insertAdjacentHTML("beforeend", `
-        <div class="msg bot">
-          <strong>EVOSGPT</strong><br>
-          <div class="bot-content">${marked.parse(msg.bot)}</div>
-          <button class="copy-btn" onclick="copyText(this)">📋</button>
-        </div>
-      `);
-    });
-    adjustChatPadding();
-    scrollToBottom();
-  }
-  loadChatHistory();
-
-  textarea.addEventListener("input", () => {
-    textarea.style.height = "auto";
-    textarea.style.height = Math.min(textarea.scrollHeight, 140) + "px";
-    adjustChatPadding();
-  });
-
-  document.getElementById("chat-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const text = textarea.value.trim();
-    if (!text) return;
-
-    chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${text}</div>`);
-    scrollToBottom();
-    textarea.value = "";
-    textarea.style.height = "40px";
-    adjustChatPadding();
-
-    const typing = document.createElement("div");
-    typing.className = "msg bot";
-    typing.id = "typing-bubble";
-    typing.innerText = "EVOSGPT is typing...";
-    chatBox.appendChild(typing);
-    scrollToBottom();
-
-    try {
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text })
-      });
-      const data = await res.json();
-      typing.remove();
-      chatBox.insertAdjacentHTML("beforeend", `
-        <div class="msg bot">
-          <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
-          <div class="bot-content">${marked.parse(data.reply)}</div>
-          <button class="copy-btn" onclick="copyText(this)">📋</button>
-        </div>
-      `);
-      adjustChatPadding();
-      scrollToBottom();
-    } catch (err) {
-      typing.remove();
-      chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot error">⚠ Error: ${err.message}</div>`);
+    // ---- Persistent Chat Storage ---- //
+    function saveChat() {
+      localStorage.setItem("evos_chat_history", chatBox.innerHTML);
     }
-  });
 
-  function copyText(button) {
-    const text = button.parentElement.innerText.replace("📋", "").trim();
-    navigator.clipboard.writeText(text).then(() => {
-      button.textContent = "✅";
-      setTimeout(() => button.textContent = "📋", 1500);
+    function loadChat() {
+      const saved = localStorage.getItem("evos_chat_history");
+      if (saved) {
+        chatBox.innerHTML = saved;
+        adjustChatPadding();
+        scrollToBottom();
+      }
+    }
+
+    function clearChat() {
+      localStorage.removeItem("evos_chat_history");
+      chatBox.innerHTML = "";
+    }
+
+    // Load chat on start
+    loadChat();
+
+    // ---- Chat Submit ---- //
+    document.getElementById("chat-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = textarea.value.trim();
+      if (!text) return;
+
+      chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${text}</div>`);
+      saveChat();
+      scrollToBottom();
+
+      textarea.value = "";
+      textarea.style.height = "40px";
+      adjustChatPadding();
+
+      const typing = document.createElement("div");
+      typing.className = "msg bot";
+      typing.id = "typing-bubble";
+      typing.innerText = "EVOSGPT is typing...";
+      chatBox.appendChild(typing);
+      scrollToBottom();
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        typing.remove();
+
+        chatBox.insertAdjacentHTML("beforeend", `
+          <div class="msg bot">
+            <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
+            <div class="bot-content">${marked.parse(data.reply)}</div>
+            <button class="copy-btn" onclick="copyText(this)">📋</button>
+          </div>
+        `);
+        saveChat();
+        adjustChatPadding();
+        scrollToBottom();
+      } catch (err) {
+        typing.remove();
+        chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot error">⚠ Error: ${err.message}</div>`);
+        saveChat();
+      }
     });
-  }
 
-  function toggleSidebar() {
-    document.getElementById("sidebar").classList.toggle("active");
-    document.getElementById("overlay").classList.toggle("active");
-  }
+    // ---- Enter to Send (Desktop) ---- //
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 768) {
+        e.preventDefault();
+        document.getElementById("chat-form").dispatchEvent(new Event("submit"));
+      }
+    });
 
-  function toggleHub() {
-    const hub = document.getElementById("hub");
-    hub.style.display = hub.style.display === "block" ? "none" : "block";
-  }
+    function copyText(button) {
+      const text = button.parentElement.innerText.replace("📋", "").trim();
+      navigator.clipboard.writeText(text).then(() => {
+        button.textContent = "✅";
+        setTimeout(() => button.textContent = "📋", 1500);
+      });
+    }
 
-  function adjustChatPadding() {
-    const form = document.getElementById("chat-form");
-    const padding = form.offsetHeight + 20;
-    chatBox.style.paddingBottom = `${padding}px`;
-  }
+    function toggleSidebar() {
+      document.getElementById("sidebar").classList.toggle("active");
+      document.getElementById("overlay").classList.toggle("active");
+    }
 
-  // Prevent layout jump on keyboard open (mobile)
-  window.addEventListener("focusin", () => {
-    document.body.style.height = "100vh";
-    scrollToBottom();
-  });
-  window.addEventListener("focusout", () => {
-    document.body.style.height = "";
+    function toggleHub() {
+      const hub = document.getElementById("hub");
+      hub.style.display = hub.style.display === "block" ? "none" : "block";
+    }
+
+    function adjustChatPadding() {
+      const form = document.getElementById("chat-form");
+      const padding = form.offsetHeight + 20;
+      chatBox.style.paddingBottom = `${padding}px`;
+    }
+
+    // Prevent layout jump on mobile keyboard
+    window.addEventListener("focusin", () => {
+      document.body.style.height = "100vh";
+      scrollToBottom();
+    });
+    window.addEventListener("focusout", () => {
+      document.body.style.height = "";
+      adjustChatPadding();
+    });
+
+    window.addEventListener("resize", adjustChatPadding);
     adjustChatPadding();
-  });
 
-  window.addEventListener("resize", adjustChatPadding);
-  adjustChatPadding();
-
-  const themeToggle = document.getElementById("theme-toggle");
-  themeToggle.addEventListener("click", () => {
-    const current = document.body.getAttribute("data-theme");
-    const newTheme = current === "dark" ? "light" : "dark";
-    document.body.setAttribute("data-theme", newTheme);
-    themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
-    localStorage.setItem("theme", newTheme);
-  });
-  const savedTheme = localStorage.getItem("theme");
-  document.body.setAttribute("data-theme", savedTheme || "light");
-  themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
-</script>
+    const themeToggle = document.getElementById("theme-toggle");
+    themeToggle.addEventListener("click", () => {
+      const current = document.body.getAttribute("data-theme");
+      const newTheme = current === "dark" ? "light" : "dark";
+      document.body.setAttribute("data-theme", newTheme);
+      themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
+      localStorage.setItem("theme", newTheme);
+    });
+    const savedTheme = localStorage.getItem("theme");
+    document.body.setAttribute("data-theme", savedTheme || "light");
+    themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
+  </script>
 </body>
 </html>
-
