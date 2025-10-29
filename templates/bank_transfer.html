@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bank Transfer - EVOSGPT</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f5f5f5;
+    padding: 40px;
+    color: #222;
+  }
+  .bank-box {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    max-width: 400px;
+    margin: auto;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  }
+  h2 { text-align: center; color: #007bff; }
+  .bank-info { margin-top: 10px; line-height: 1.6; }
+  form { margin-top: 20px; }
+  select, input[type=submit] {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc;
+  }
+  input[type=submit] {
+    background: #007bff; color: white; font-weight: bold; border: none; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<div class="bank-box">
+  <h2>🏦 Bank Transfer</h2>
+  <div class="bank-info">
+    <strong>Bank:</strong> {{ bank.bank_name }} <br>
+    <strong>Account Name:</strong> {{ bank.account_name }} <br>
+    <strong>Account Number:</strong> {{ bank.account_number }} <br>
+    <strong>Branch:</strong> {{ bank.branch }} <br>
+    <strong>Note:</strong> {{ bank.note }}
+  </div>
+
+  <form method="POST">
+    <label for="tier">Select Tier:</label>
+    <select name="tier" id="tier">
+      {% for t in tiers %}
+        <option value="{{ t }}">{{ t }}</option>
+      {% endfor %}
+    </select>
+    <input type="submit" value="Submit Transfer Confirmation">
+  </form>
+
+  <p style="text-align:center; margin-top:15px;">
+    <a href="/" style="color:#007bff;">← Back to Chat</a>
+  </p>
+</div>
+</body>
+</html>
