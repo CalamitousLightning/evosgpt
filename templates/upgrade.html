@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Upgrade - EVOSGPT</title>
   <style>
     :root {
@@ -106,14 +106,15 @@
 
       <label for="payment_method">Payment Method:</label>
       <select name="payment_method" id="payment_method" required>
-        <option value="Paystack">💳 Paystack</option>
-       
+        <option value="Paystack">💳 Paystack (Card / MoMo)</option>
+        <option value="Coinbase">🪙 Coinbase (Crypto)</option>
+        <option value="Bank">🏦 Bank Transfer</option>
       </select>
 
       <label for="coupon">Coupon Code (optional):</label>
-      <input type="text" name="coupon" id="coupon" placeholder="Enter coupon code">
+      <input type="text" name="coupon" id="coupon" placeholder="Enter coupon code" />
 
-      <input type="submit" value="🚀 Upgrade Now">
+      <input type="submit" value="🚀 Upgrade Now" />
     </form>
 
     {% if msg %}
@@ -123,13 +124,24 @@
   </div>
 
   <script>
-    // Apply saved or system theme
+    // Auto theme detection
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) {
       document.body.setAttribute("data-theme", savedTheme);
     } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
       document.body.setAttribute("data-theme", "dark");
     }
+
+    // Detect country + currency dynamically (client-side example)
+    fetch("https://ipapi.co/json/")
+      .then(res => res.json())
+      .then(data => {
+        const country = data.country_name || "your country";
+        const currency = data.currency || "USD";
+        document.querySelectorAll("option").forEach(opt => {
+          opt.textContent = opt.textContent.replace("{{ currency }}", currency);
+        });
+      });
   </script>
 </body>
 </html>
