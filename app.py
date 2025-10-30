@@ -175,8 +175,7 @@ else:
     sqlite3.connect = sqlite_connect_wrapper
 
 
-# ---------- DB INIT (extended with guests + summaries) ----------
-# ---------- DB INIT (no summaries, chats stay linked in chat_logs/memory) ----------
+# ---------- DB INIT (Extended for EVOSGPT Memory + Stability) ----------
 def init_db():
     db_mode = os.getenv("DB_MODE", "sqlite").lower()  # "sqlite" or "supabase"/"postgres"
 
@@ -185,7 +184,7 @@ def init_db():
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
 
-        # ✅ users table
+        # ---------- USERS ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -201,7 +200,7 @@ def init_db():
             )
         """)
 
-        # ✅ guests table
+        # ---------- GUESTS ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS guests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,7 +209,7 @@ def init_db():
             )
         """)
 
-        # ✅ chat logs
+        # ---------- CHAT LOGS ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS chat_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -224,7 +223,7 @@ def init_db():
             )
         """)
 
-        # ✅ system logs
+        # ---------- SYSTEM LOGS ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS system_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -236,26 +235,30 @@ def init_db():
             )
         """)
 
-        # ✅ memory
-        if os.getenv("RESET_MEMORY", "true").lower() == "true":
-            c.execute("DROP TABLE IF EXISTS memory")
+        # ---------- MEMORY (Per-user conversational recall) ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                guest_id INTEGER,
-                user_input TEXT,
-                bot_response TEXT,
-                system_msg INTEGER DEFAULT 0,
-                time_added DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id),
-                FOREIGN KEY(guest_id) REFERENCES guests(id)
+                role TEXT,                -- 'user' or 'evosgpt'
+                content TEXT,             -- message or reply
+                importance REAL DEFAULT 0.5,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id)
             )
         """)
 
-        # ❌ summaries REMOVED
+        # ---------- GLOBAL MEMORY (Collective long-term summaries) ----------
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS global_memory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT,
+                importance REAL DEFAULT 0.5,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
-        # ✅ analytics
+        # ---------- ANALYTICS ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS analytics (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,7 +267,7 @@ def init_db():
             )
         """)
 
-        # ✅ purchases
+        # ---------- PURCHASES ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS purchases (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -277,7 +280,7 @@ def init_db():
             )
         """)
 
-        # ✅ coupons
+        # ---------- COUPONS ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS coupons (
                 code TEXT PRIMARY KEY,
@@ -286,7 +289,7 @@ def init_db():
             )
         """)
 
-        # ✅ activity log
+        # ---------- ACTIVITY LOG ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS activity_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -298,7 +301,7 @@ def init_db():
             )
         """)
 
-        # ✅ seed coupons
+        # ---------- SEED COUPONS ----------
         c.execute("SELECT COUNT(*) FROM coupons")
         if c.fetchone()[0] == 0:
             c.executemany("INSERT INTO coupons (code, tier) VALUES (?, ?)", [
@@ -309,22 +312,24 @@ def init_db():
 
         conn.commit()
         conn.close()
+        print("✅ SQLite DB initialized successfully with EVOSGPT memory support.")
 
+    # ---------- SUPABASE / POSTGRES ----------
     elif db_mode in ("supabase", "postgres"):
         if psycopg2 is None:
             raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
         conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
         cur = conn.cursor()
 
-        # ✅ users
+        # USERS
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
-            email TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE,
             password TEXT NOT NULL,
-            tier TEXT NOT NULL DEFAULT 'Basic',
-            status TEXT NOT NULL DEFAULT 'active',
+            tier TEXT DEFAULT 'Basic',
+            status TEXT DEFAULT 'active',
             referral_code TEXT UNIQUE,
             referrals_used INTEGER DEFAULT 0,
             upgrade_expiry TIMESTAMP,
@@ -332,7 +337,7 @@ def init_db():
         )
         """)
 
-        # ✅ guests
+        # GUESTS
         cur.execute("""
         CREATE TABLE IF NOT EXISTS guests (
             id SERIAL PRIMARY KEY,
@@ -341,7 +346,7 @@ def init_db():
         )
         """)
 
-        # ✅ chat logs
+        # CHAT LOGS
         cur.execute("""
         CREATE TABLE IF NOT EXISTS chat_logs (
             id SERIAL PRIMARY KEY,
@@ -353,7 +358,7 @@ def init_db():
         )
         """)
 
-        # ✅ system logs
+        # SYSTEM LOGS
         cur.execute("""
         CREATE TABLE IF NOT EXISTS system_logs (
             id SERIAL PRIMARY KEY,
@@ -364,22 +369,29 @@ def init_db():
         )
         """)
 
-        # ✅ memory
+        # MEMORY
         cur.execute("""
         CREATE TABLE IF NOT EXISTS memory (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id),
-            guest_id INTEGER REFERENCES guests(id),
-            user_input TEXT,
-            bot_response TEXT,
-            system_msg INTEGER DEFAULT 0,
-            time_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            role TEXT,
+            content TEXT,
+            importance REAL DEFAULT 0.5,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
 
-        # ❌ summaries REMOVED
+        # GLOBAL MEMORY
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS global_memory (
+            id SERIAL PRIMARY KEY,
+            content TEXT,
+            importance REAL DEFAULT 0.5,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
 
-        # ✅ analytics
+        # ANALYTICS
         cur.execute("""
         CREATE TABLE IF NOT EXISTS analytics (
             id SERIAL PRIMARY KEY,
@@ -388,7 +400,7 @@ def init_db():
         )
         """)
 
-        # ✅ purchases
+        # PURCHASES
         cur.execute("""
         CREATE TABLE IF NOT EXISTS purchases (
             id SERIAL PRIMARY KEY,
@@ -400,7 +412,7 @@ def init_db():
         )
         """)
 
-        # ✅ coupons
+        # COUPONS
         cur.execute("""
         CREATE TABLE IF NOT EXISTS coupons (
             code TEXT PRIMARY KEY,
@@ -409,7 +421,7 @@ def init_db():
         )
         """)
 
-        # ✅ activity log
+        # ACTIVITY LOG
         cur.execute("""
         CREATE TABLE IF NOT EXISTS activity_log (
             id SERIAL PRIMARY KEY,
@@ -420,7 +432,7 @@ def init_db():
         )
         """)
 
-        # ✅ seed coupons
+        # SEED COUPONS
         cur.execute("SELECT COUNT(*) FROM coupons")
         if cur.fetchone()[0] == 0:
             cur.executemany("INSERT INTO coupons (code, tier) VALUES (%s, %s)", [
@@ -432,6 +444,7 @@ def init_db():
         conn.commit()
         cur.close()
         conn.close()
+        print("✅ Postgres/Supabase DB initialized successfully with EVOSGPT memory support.")
 
 # ---------- small helper for SQLite ALTERs (idempotent) ----------
 def safe_alters_sqlite(cursor):
@@ -1098,16 +1111,16 @@ def auto_paragraph(text: str) -> str:
 
 
 # ---------- CHAT ROUTE ----------
+# ---------- CHAT ROUTE WITH MEMORY RECALL ----------
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
     user_msg = (data.get("message") or "").strip()
     ui = user_msg.lower()
-
     tier = session.get("tier", "Basic")
     reply = None
 
-    # --- Guest mode ---
+    # --- Guest / User ID setup ---
     guest_id = None
     if "user_id" not in session:
         if "guest_id" not in session:
@@ -1136,25 +1149,20 @@ def chat():
                 "reply": "⚠ You have 1 free chat left. Please register or log in to continue."
             })
 
-    # --- Founder unlock sequence ---
+    # --- Founder Easter Egg ---
     if "user_id" in session:
         seq = session.get("founder_seq", 0)
         if seq == 0 and ui == "evosgpt where you created":
-            reply = "lab"
-            session["founder_seq"] = 1
+            reply = "lab"; session["founder_seq"] = 1
         elif seq == 1 and ui == "ghanaherewecome":
-            reply = "are you coming to Ghana?"
-            session["founder_seq"] = 2
+            reply = "are you coming to Ghana?"; session["founder_seq"] = 2
         elif seq == 2 and ui == "nameless":
             reply = "[SYSTEM] Founder tier unlocked. Welcome, hidden user."
-            session["founder_seq"] = 0
-            session["tier"] = "Founder"
+            session.update({"founder_seq": 0, "tier": "Founder"})
             try:
                 conn = sqlite3.connect("database/memory.db")
-                c = conn.cursor()
-                c.execute("UPDATE users SET tier = ? WHERE id = ?", ("Founder", session["user_id"]))
-                conn.commit()
-                conn.close()
+                conn.execute("UPDATE users SET tier = ? WHERE id = ?", ("Founder", session["user_id"]))
+                conn.commit(); conn.close()
             except Exception as e:
                 log_suspicious("FounderUnlockFail", str(e))
         elif tier == "Founder" and ui == "logout evosgpt":
@@ -1162,51 +1170,74 @@ def chat():
             session["tier"] = "Basic"
             try:
                 conn = sqlite3.connect("database/memory.db")
-                c = conn.cursor()
-                c.execute("UPDATE users SET tier = ? WHERE id = ?", ("Basic", session["user_id"]))
-                conn.commit()
-                conn.close()
+                conn.execute("UPDATE users SET tier = ? WHERE id = ?", ("Basic", session["user_id"]))
+                conn.commit(); conn.close()
             except Exception as e:
                 log_suspicious("FounderLogoutFail", str(e))
         else:
             if seq > 0 and ui not in ["evosgpt where you created", "ghanaherewecome", "nameless"]:
                 session["founder_seq"] = 0
 
-    # --- AI Router ---
-    if reply is None:
-        try:
-            raw_reply = route_ai_call(tier, user_msg)
-            # ✅ Trust system prompt formatting, just polish with auto_paragraph for safety
-            reply = auto_paragraph(raw_reply)
-        except Exception as e:
-            log_suspicious("LLMError", str(e))
-            reply = f"""⚠️ **System Error**
-
-• I wasn’t able to process your request.  
-• Input received:  
-
-> {user_msg}"""
-
-    # --- Save chat ---
+    # --- 🧠 Retrieve previous memory ---
+    memory_context = ""
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
+        if "user_id" in session:
+            c.execute("""
+                SELECT user_input, bot_response FROM memory
+                WHERE user_id = ? ORDER BY id DESC LIMIT 5
+            """, (session["user_id"],))
+        else:
+            c.execute("""
+                SELECT user_input, bot_response FROM memory
+                WHERE guest_id = ? ORDER BY id DESC LIMIT 5
+            """, (guest_id,))
+        rows = c.fetchall()
+        conn.close()
 
+        if rows:
+            history_lines = []
+            for msg, resp in reversed(rows):  # oldest to newest
+                history_lines.append(f"User: {msg}\nEVOSGPT: {resp}")
+            memory_context = "\n".join(history_lines)
+    except Exception as e:
+        log_suspicious("MemoryReadFail", str(e))
+
+    # --- 🔄 AI Response Generation ---
+    if reply is None:
+        try:
+            prompt = f"""
+You are EVOSGPT, a helpful and evolving AI. 
+Below is a short memory of recent conversations with this user. 
+Use it to maintain context, tone, and recall relevant details when answering.
+
+[Conversation Memory]
+{memory_context}
+
+[User Message]
+{user_msg}
+"""
+            raw_reply = route_ai_call(tier, prompt)
+            reply = auto_paragraph(raw_reply)
+        except Exception as e:
+            log_suspicious("LLMError", str(e))
+            reply = f"⚠️ System error occurred while processing: {user_msg}"
+
+    # --- 💾 Save chat into memory ---
+    try:
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
         if "user_id" in session:
             uid = session["user_id"]
-            c.execute(
-                "INSERT INTO memory (user_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
-                (uid, user_msg, reply)
-            )
+            c.execute("INSERT INTO memory (user_id, user_input, bot_response) VALUES (?, ?, ?)",
+                      (uid, user_msg, reply))
             conn.commit()
             enforce_memory_limit(uid, tier)
         elif guest_id:
-            c.execute(
-                "INSERT INTO memory (guest_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
-                (guest_id, user_msg, reply)
-            )
+            c.execute("INSERT INTO memory (guest_id, user_input, bot_response) VALUES (?, ?, ?)",
+                      (guest_id, user_msg, reply))
             conn.commit()
-
         conn.close()
     except Exception as e:
         log_suspicious("ChatInsertFail", str(e))
@@ -2390,6 +2421,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
