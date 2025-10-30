@@ -2123,6 +2123,7 @@ def bank_transfer():
 
 # ---------- PAYMENTS & WEBHOOKS (HARDENED) ----------
 from hmac import compare_digest
+import hmac, hashlib
 
 # Prices (source of truth) → exclude Founder (not for sale)
 TIER_PRICE_USD = {"Core": 1, "Pro": 5, "King": 9}
@@ -2155,62 +2156,56 @@ def _upgrade_user(user_id: int, tier: str, days: int = 30):
     conn.commit()
     conn.close()
 
-# --- PAYSTACK: verify signature + idempotent insert + price cross-check ---
+# --- PAYSTACK WEBHOOK ---
 @app.route("/webhook/paystack", methods=["POST"])
 def webhook_paystack():
     raw = request.get_data() or b""
     sent_sig = request.headers.get("X-Paystack-Signature", "")
     secret = os.getenv("PAYSTACK_SECRET", "")
 
-    # Signature check (sha512)
     if not sent_sig or not secret:
-        log_suspicious("PaystackWebhookMissingSigOrSecret", sent_sig or "no-sig")
+        print("⚠️ Paystack webhook missing signature or secret.")
         return jsonify({"status": "invalid-signature"}), 400
 
     expected = hmac.new(secret.encode("utf-8"), raw, hashlib.sha512).hexdigest()
     if not compare_digest(sent_sig, expected):
-        log_suspicious("PaystackWebhookInvalidSig", sent_sig[:64])
+        print("⚠️ Invalid Paystack signature.")
         return jsonify({"status": "invalid-signature"}), 400
 
     payload = _safe_parse_json(raw)
     if not payload:
-        log_suspicious("PaystackWebhookBadJSON", raw[:256].decode(errors="ignore"))
+        print("⚠️ Invalid Paystack JSON payload.")
         return jsonify({"status": "bad-json"}), 400
 
-    # Only process successful charge events
     if payload.get("event") != "charge.success":
         return jsonify({"status": "ignored"}), 200
 
     data = payload.get("data", {}) or {}
-    reference = data.get("reference") or ""
-    meta = data.get("metadata") or {}
+    reference = data.get("reference", "")
+    meta = data.get("metadata", {})
 
-    # Extract user_id safely
-    user_id_raw = meta.get("user_id")
+    # Extract user ID safely
     try:
-        user_id = int(user_id_raw) if user_id_raw is not None else None
+        user_id = int(meta.get("user_id"))
     except Exception:
         user_id = None
 
     tier = meta.get("tier", "Core")
 
-    # Validate inputs
     if not isinstance(user_id, int) or tier not in VALID_TIERS:
-        log_suspicious("PaystackWebhookBadMeta", str(meta))
+        print("⚠️ Paystack bad metadata:", meta)
         return jsonify({"status": "bad-metadata"}), 400
 
-    # --- 💰 Price validation ---
+    # 💰 Validate amount (tolerance)
     paid_amount = data.get("amount", 0) / 100  # pesewas → GHS
     expected_amount = TIER_PRICE_USD[tier] * EXCHANGE_RATES["GHS"]
-    if abs(paid_amount - expected_amount) > 0.5:  # tolerance for rounding
-        log_suspicious("PaystackAmountMismatch", f"{paid_amount} vs {expected_amount}")
+    if abs(paid_amount - expected_amount) > 0.5:
+        print(f"⚠️ Paystack amount mismatch: {paid_amount} vs {expected_amount}")
         return jsonify({"status": "amount-mismatch"}), 400
 
-    # Idempotency guard
     if _purchases_ref_exists(reference):
         return jsonify({"status": "ok"}), 200
 
-    # Persist purchase + upgrade user
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
@@ -2221,11 +2216,11 @@ def webhook_paystack():
         conn.commit()
         conn.close()
     except Exception as e:
-        log_suspicious("PaystackWebhookDBError", str(e))
+        print("⚠️ Paystack DB error:", e)
         return jsonify({"status": "db-error"}), 500
 
-    _upgrade_user(user_id, tier, days=30)
-    log_action(user_id, "upgrade", f"Upgraded via Paystack → {tier}")
+    _upgrade_user(user_id, tier)
+    print(f"✅ User {user_id} upgraded via Paystack → {tier}")
     return jsonify({"status": "ok"}), 200
 
 
@@ -2233,7 +2228,6 @@ def webhook_paystack():
 def set_security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
-    resp.headers["X-XSS-Protection"] = "0"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self' 'unsafe-inline' https://api.commerce.coinbase.com; "
@@ -2243,7 +2237,8 @@ def set_security_headers(resp):
     )
     return resp
 
-# --- COINBASE: verify signature + idempotent insert ---
+
+# --- COINBASE WEBHOOK ---
 @app.route("/webhook/coinbase", methods=["POST"])
 def webhook_coinbase():
     sig = request.headers.get("X-CC-Webhook-Signature", "")
@@ -2251,24 +2246,22 @@ def webhook_coinbase():
     raw = request.get_data() or b""
 
     if not sig or not secret:
-        log_suspicious("CoinbaseWebhookMissingSigOrSecret", "missing header or secret")
+        print("⚠️ Coinbase webhook missing signature or secret.")
         return jsonify({"status": "invalid"}), 400
 
-    # Coinbase webhook signature is HMAC-SHA256 (hex)
     mac = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
     if not compare_digest(sig, mac):
-        log_suspicious("CoinbaseWebhookInvalidSig", sig[:64])
+        print("⚠️ Coinbase invalid signature.")
         return jsonify({"status": "invalid-signature"}), 400
 
     payload = _safe_parse_json(raw)
     if not payload:
-        log_suspicious("CoinbaseWebhookBadJSON", raw[:256].decode(errors="ignore"))
+        print("⚠️ Coinbase bad JSON payload.")
         return jsonify({"status": "bad-json"}), 400
 
     event = payload.get("event", {}) or {}
     event_type = event.get("type", "")
 
-    # Accept confirmed/resolved charges only
     if event_type not in {"charge:confirmed", "charge:resolved"}:
         return jsonify({"status": "ignored"}), 200
 
@@ -2276,20 +2269,17 @@ def webhook_coinbase():
     meta = data.get("metadata", {}) or {}
     reference = data.get("code") or ""
 
-    # Extract user_id safely
-    user_id_raw = meta.get("user_id")
     try:
-        user_id = int(user_id_raw) if user_id_raw is not None else None
+        user_id = int(meta.get("user_id"))
     except Exception:
         user_id = None
 
     tier = meta.get("tier", "Pro")
 
     if not isinstance(user_id, int) or tier not in VALID_TIERS:
-        log_suspicious("CoinbaseWebhookBadMeta", str(meta))
+        print("⚠️ Coinbase bad metadata:", meta)
         return jsonify({"status": "bad-metadata"}), 400
 
-    # Idempotency guard
     if _purchases_ref_exists(reference):
         return jsonify({"status": "ok"}), 200
 
@@ -2303,29 +2293,32 @@ def webhook_coinbase():
         conn.commit()
         conn.close()
     except Exception as e:
-        log_suspicious("CoinbaseWebhookDBError", str(e))
+        print("⚠️ Coinbase DB error:", e)
         return jsonify({"status": "db-error"}), 500
 
-    _upgrade_user(user_id, tier, days=30)
-    log_action(user_id, "upgrade", f"Upgraded via Coinbase → {tier}")
+    _upgrade_user(user_id, tier)
+    print(f"✅ User {user_id} upgraded via Coinbase → {tier}")
     return jsonify({"status": "ok"}), 200
 
 
 # ---------- UPGRADE SUCCESS ----------
 @app.route("/upgrade_success")
 def upgrade_success():
+    """Callback page shown after successful payment from Paystack or Coinbase."""
     if "user_id" not in session:
-        flash("⚠ You must be logged in.")
+        flash("⚠️ You must be logged in.")
         return redirect(url_for("login"))
 
-    # Get Paystack reference from query string
+    # Retrieve payment reference (if provided by Paystack)
     ref = request.args.get("reference", "unknown")
 
+    # Notify user and log
     flash("✅ Payment successful! Your upgrade will be applied shortly.")
-    # Optional: show the reference for debugging
-    print(f"[DEBUG] Paystack callback with reference: {ref}")
+    print(f"[DEBUG] Payment success callback received. Reference: {ref}")
 
+    # Redirect to home or dashboard
     return redirect(url_for("index"))
+
 
 @app.errorhandler(404)
 def not_found_error(e):
@@ -2397,6 +2390,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
