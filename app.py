@@ -1993,6 +1993,7 @@ def logout():
 
 
 # ---------- UPGRADE ROUTE (Paystack + Coinbase + Bank) ----------
+# ---------- UPGRADE ROUTE (Paystack + Coinbase + Bank) ----------
 import requests, json, time, sqlite3, os, hmac, hashlib
 from datetime import datetime, timedelta
 from flask import request, session, redirect, url_for, flash, render_template, jsonify
@@ -2000,21 +2001,20 @@ from flask import request, session, redirect, url_for, flash, render_template, j
 # === Payment Config (read from env) ===
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET")
 PAYSTACK_PUBLIC_KEY = os.getenv("PAYSTACK_PUBLIC_KEY")
-COINBASE_API_KEY = os.getenv("COINBASE_API_KEY")               # Coinbase Commerce API key (UUID-style)
-COINBASE_WEBHOOK_SECRET = os.getenv("COINBASE_WEBHOOK_SECRET") # Coinbase Commerce webhook secret
+COINBASE_API_KEY = os.getenv("COINBASE_API_KEY")               # Coinbase Commerce API key (UUID)
+COINBASE_WEBHOOK_SECRET = os.getenv("COINBASE_WEBHOOK_SECRET") # Coinbase webhook secret
 
-# Prices in USD (source of truth)
+# --- Tier setup ---
 TIER_PRICE_USD = {"Core": 1, "Pro": 5, "King": 9}
 VALID_TIERS = set(TIER_PRICE_USD.keys())
 
-# Example exchange rates (display only — use a live rate provider in production)
+# --- Example exchange rates ---
 EXCHANGE_RATES = {
-    "GHS": 15.0,     # 1 USD = 15 GHS (example)
+    "GHS": 15.0,   # 1 USD = 15 GHS (example)
     "NGN": 1500.0,
     "USD": 1.0
 }
 
-# Default currency used when creating Paystack transactions
 PAYSTACK_ACCOUNT_CURRENCY = "GHS"
 
 
@@ -2032,9 +2032,9 @@ def upgrade():
         user_id = session["user_id"]
         tier = request.form.get("tier")
         payment_method = request.form.get("payment_method")
-        coupon = request.form.get("coupon", "").strip().upper()
+        coupon = (request.form.get("coupon") or "").strip().upper()
 
-        # ---------- coupon handling ----------
+        # ---------- Coupon handling ----------
         if coupon:
             c.execute("SELECT tier, used FROM coupons WHERE code = ?", (coupon,))
             row = c.fetchone()
@@ -2053,13 +2053,13 @@ def upgrade():
                 flash("⚠️ Invalid or already used coupon.")
                 return redirect(url_for("upgrade"))
 
-        # ---------- normal upgrade ----------
+        # ---------- Normal upgrade ----------
         if tier not in VALID_TIERS:
             conn.close()
             flash("⚠️ Invalid tier selected.")
             return redirect(url_for("upgrade"))
 
-        # Save pending purchase record (idempotency + audit)
+        # Save pending purchase for audit
         ref = f"EVOS-{user_id}-{int(time.time())}"
         c.execute("INSERT INTO purchases (user_id, tier, payment_method, reference) VALUES (?, ?, ?, ?)",
                   (user_id, tier, payment_method, ref))
@@ -2075,7 +2075,7 @@ def upgrade():
             amount_usd = TIER_PRICE_USD[tier]
             rate = EXCHANGE_RATES.get(PAYSTACK_ACCOUNT_CURRENCY, 1.0)
             amount_local = amount_usd * rate
-            amount_smallest = int(round(amount_local * 100))  # pesewas
+            amount_smallest = int(round(amount_local * 100))  # pesewas or kobo
 
             headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
             data = {
@@ -2091,11 +2091,11 @@ def upgrade():
                 resp = requests.post("https://api.paystack.co/transaction/initialize",
                                      headers=headers, json=data, timeout=15)
             except Exception as e:
-                print("Paystack request failed:", e)
+                print("❌ Paystack request failed:", e)
                 flash("❌ Paystack initialization failed (network).")
                 return redirect(url_for("upgrade"))
 
-            print("Paystack init response:", resp.status_code, resp.text)
+            print("🔹 Paystack init response:", resp.status_code, resp.text)
             try:
                 rj = resp.json()
             except Exception:
@@ -2116,6 +2116,7 @@ def upgrade():
 
             amount_usd = float(TIER_PRICE_USD[tier])
             coin_ref = f"EVOS-COIN-{user_id}-{int(time.time())}"
+
             payload = {
                 "name": f"EVOSGPT - {tier} Plan",
                 "description": f"Upgrade to {tier}",
@@ -2125,6 +2126,7 @@ def upgrade():
                 "redirect_url": url_for("upgrade_success", _external=True),
                 "cancel_url": url_for("upgrade", _external=True)
             }
+
             headers = {
                 "Content-Type": "application/json",
                 "X-CC-Api-Key": COINBASE_API_KEY,
@@ -2135,21 +2137,20 @@ def upgrade():
                 resp = requests.post("https://api.commerce.coinbase.com/charges",
                                      json=payload, headers=headers, timeout=15)
             except Exception as e:
-                print("Coinbase create charge network error:", e)
+                print("❌ Coinbase network error:", e)
                 flash("❌ Coinbase initialization failed (network).")
                 return redirect(url_for("upgrade"))
 
-            print("Coinbase create charge response:", resp.status_code, resp.text)
+            print("🔹 Coinbase create charge response:", resp.status_code, resp.text)
             try:
                 rj = resp.json()
-            except Exception:
+            except Exception as e:
+                print("❌ Coinbase JSON decode error:", e)
                 rj = {}
 
-            # Some successful responses may return 201
-            if resp.status_code in (200, 201):
-                hosted_url = rj.get("data", {}).get("hosted_url")
+            if resp.ok and "data" in rj:
+                hosted_url = rj["data"].get("hosted_url")
                 if hosted_url:
-                    # Save pending purchase for idempotency
                     try:
                         conn = sqlite3.connect("database/memory.db")
                         c = conn.cursor()
@@ -2158,12 +2159,15 @@ def upgrade():
                         conn.commit()
                         conn.close()
                     except Exception as e:
-                        print("Coinbase save pending purchase error:", e)
+                        print("⚠️ Coinbase save purchase error:", e)
                     return redirect(hosted_url)
-
-            # If we reach here something failed
-            flash("❌ Coinbase initialization failed. See logs for details.")
-            return redirect(url_for("upgrade"))
+            else:
+                print("❌ Coinbase charge failed:", resp.status_code, resp.text)
+                error_msg = ""
+                if isinstance(rj, dict):
+                    error_msg = rj.get("error", {}).get("message") or json.dumps(rj)
+                flash(f"❌ Coinbase error: {error_msg}")
+                return redirect(url_for("upgrade"))
 
         # ---------- BANK TRANSFER ----------
         elif payment_method == "Bank":
@@ -2173,7 +2177,7 @@ def upgrade():
             flash("⚠️ Invalid payment method.")
             return redirect(url_for("upgrade"))
 
-    # ---------- GET request: render upgrade page ----------
+    # ---------- GET request ----------
     rate = EXCHANGE_RATES.get(PAYSTACK_ACCOUNT_CURRENCY, 1.0)
     prices = {t: int(round(TIER_PRICE_USD[t] * rate)) for t in TIER_PRICE_USD}
     return render_template("upgrade.html",
@@ -2182,24 +2186,21 @@ def upgrade():
                            currency=PAYSTACK_ACCOUNT_CURRENCY)
 
 
-# ---------- Support route: create_coinbase_charge (optional if you want a separate POST endpoint) ----------
+# ---------- COINBASE DIRECT CHARGE ROUTE ----------
 @app.route("/create_coinbase_charge", methods=["POST"])
 def create_coinbase_charge():
-    """
-    Optional: a separate POST endpoint if your frontend posts directly to /create_coinbase_charge.
-    This duplicates the Coinbase portion of /upgrade but is useful for a dedicated button.
-    """
+    """Standalone Coinbase charge endpoint."""
     if "user_id" not in session:
         flash("⚠️ You must be logged in to pay.")
         return redirect(url_for("login"))
 
     tier = request.form.get("tier")
     if tier not in VALID_TIERS:
-        flash("⚠ Invalid tier.")
+        flash("⚠️ Invalid tier.")
         return redirect(url_for("upgrade"))
 
     if not COINBASE_API_KEY:
-        flash("❌ Coinbase Commerce is not configured.")
+        flash("❌ Coinbase not configured.")
         return redirect(url_for("upgrade"))
 
     amount_usd = float(TIER_PRICE_USD[tier])
@@ -2222,20 +2223,21 @@ def create_coinbase_charge():
     }
 
     try:
-        resp = requests.post("https://api.commerce.coinbase.com/charges", json=payload, headers=headers, timeout=15)
+        resp = requests.post("https://api.commerce.coinbase.com/charges",
+                             json=payload, headers=headers, timeout=15)
     except Exception as e:
-        print("Coinbase create charge network error:", e)
+        print("❌ Coinbase create charge network error:", e)
         flash("❌ Coinbase initialization failed (network).")
         return redirect(url_for("upgrade"))
 
-    print("Coinbase create charge response:", resp.status_code, resp.text)
+    print("🔹 Coinbase direct charge response:", resp.status_code, resp.text)
     try:
         rj = resp.json()
     except Exception:
         rj = {}
 
-    if resp.status_code in (200, 201):
-        hosted_url = rj.get("data", {}).get("hosted_url")
+    if resp.ok and "data" in rj:
+        hosted_url = rj["data"].get("hosted_url")
         if hosted_url:
             try:
                 conn = sqlite3.connect("database/memory.db")
@@ -2245,14 +2247,15 @@ def create_coinbase_charge():
                 conn.commit()
                 conn.close()
             except Exception as e:
-                print("Coinbase save pending purchase error:", e)
+                print("⚠️ Coinbase save purchase error:", e)
             return redirect(hosted_url)
 
-    flash("❌ Coinbase initialization failed, try another payment method.")
+    print("❌ Coinbase charge failed:", resp.status_code, resp.text)
+    flash("❌ Coinbase initialization failed. Check your API key or dashboard.")
     return redirect(url_for("upgrade"))
 
 
-# ---------- Bank transfer route ----------
+# ---------- BANK TRANSFER ROUTE ----------
 @app.route("/bank_transfer", methods=["GET", "POST"])
 def bank_transfer():
     if "user_id" not in session:
@@ -2268,7 +2271,7 @@ def bank_transfer():
                   (session['user_id'], tier, "Bank", ref))
         conn.commit()
         conn.close()
-        flash("✅ Instruction sent. Please complete the bank transfer and upload a proof on your profile / email us the proof.")
+        flash("✅ Bank transfer instruction sent. Upload your proof or email support@evosgpt.com with reference.")
         return redirect(url_for("index"))
 
     bank_details = {
@@ -2279,7 +2282,6 @@ def bank_transfer():
         "note": "After transfer, upload proof or email support@evosgpt.com with your reference."
     }
     return render_template("bank_transfer.html", bank=bank_details, tiers=list(TIER_PRICE_USD.keys()))
-
 
 # ---------- PAYMENTS & WEBHOOKS (HARDENED) ----------
 from hmac import compare_digest
@@ -2550,6 +2552,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
