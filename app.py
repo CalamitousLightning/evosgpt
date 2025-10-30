@@ -58,8 +58,6 @@ COINBASE_API_KEY = os.getenv("COINBASE_API_KEY")
 MTN_API_KEY = os.getenv("MTN_API_KEY")
 
 app = Flask(__name__)
-from db_init import init_db
-init_db()
 from flask_cors import CORS
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
@@ -177,6 +175,7 @@ else:
 
 
 # ---------- DB INIT (EVOSGPT Evolution Memory Edition) ----------
+from db_init import init_db
 def init_db():
     db_mode = os.getenv("DB_MODE", "sqlite").lower()  # "sqlite" or "supabase"/"postgres"
 
@@ -2553,6 +2552,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
