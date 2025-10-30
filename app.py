@@ -1,26 +1,54 @@
-# app.py - EVOSGPT WebCore (Day33)
+## app.py - EVOSGPT WebCore (Day33)
 import os
 import json
 import sqlite3
-import re
-import time
-import hmac
-import hashlib
-import threading
-import random
-import psycopg2
-from uuid import uuid4
 from datetime import datetime, timedelta
 from typing import Optional
+import time
+import hmac
+import threading
+import time
+import random
+from uuid import uuid4
+import hashlib
+import re
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, flash, abort, jsonify, has_request_context
 )
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_cors import CORS
+import requests
+
+# Optional: Coinbase Commerce python client (if installed)
+try:
+    from coinbase_commerce.client import Client as CoinbaseClient
+    from coinbase_commerce.webhook import Webhook, SignatureVerificationError
+    COINBASE_AVAILABLE = True
+except Exception:
+    COINBASE_AVAILABLE = False
+
+import os
+import psycopg2
 from dotenv import load_dotenv
 
+load_dotenv()  # load your .env file
+
+url = os.getenv("SUPABASE_DB_URL")
+
+try:
+    conn = psycopg2.connect(url)
+    cur = conn.cursor()
+    cur.execute("SELECT NOW();")
+    print("✅ Connected! Current time:", cur.fetchone())
+    cur.close()
+    conn.close()
+except Exception as e:
+    print("❌ Connection failed:", e)
+
+
+
 # ---------- ENVIRONMENT ----------
+from dotenv import load_dotenv
 load_dotenv()
 
 FLASK_SECRET = os.getenv("FLASK_SECRET", "fallback_secret")
@@ -28,59 +56,43 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PAYSTACK_SECRET = os.getenv("PAYSTACK_SECRET")
 COINBASE_API_KEY = os.getenv("COINBASE_API_KEY")
 MTN_API_KEY = os.getenv("MTN_API_KEY")
-DB_MODE = os.getenv("DB_MODE", "sqlite").lower()
-SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 
-# ---------- FLASK APP ----------
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
-app.secret_key = FLASK_SECRET
+from db_init import init_db
+init_db()
+from flask_cors import CORS
+CORS(app, resources={r"/*": {"origins": "*"}}) 
+
+app.secret_key = os.getenv("FLASK_SECRET", "fallback-secret")
+
+# Security config (set SECURE=True in prod only if HTTPS)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=bool(int(os.getenv("SESSION_COOKIE_SECURE", "0"))),
+    SESSION_COOKIE_SECURE=bool(int(os.getenv("SESSION_COOKIE_SECURE", "0"))),  # 1 in prod over HTTPS
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
 
-# ---------- DB INIT ----------
-from db_init import init_db
-try:
-    init_db()
-    print("✅ Database initialized successfully.")
-except Exception as e:
-    print("❌ Database initialization failed:", e)
-
-# ---------- POSTGRES TEST (optional, dev-only) ----------
-if DB_MODE in ("postgres", "supabase"):
-    try:
-        conn = psycopg2.connect(SUPABASE_DB_URL)
-        cur = conn.cursor()
-        cur.execute("SELECT NOW();")
-        print("🧠 DB MODE:", DB_MODE)
-        print("✅ Connected to Postgres/Supabase at:", SUPABASE_DB_URL.split('@')[-1].split('/')[0])
-        print("⏰ Current DB time:", cur.fetchone()[0])
-        cur.close()
-        conn.close()
-    except Exception as e:
-        print("⚠️ Postgres connection test failed:", e)
-else:
-    print("🧠 DB MODE: SQLite (local memory.db)")
 
 # ---------- GLOBAL LOGGER ----------
 def log_action(user_id, action, details="N/A"):
-    """Logs actions into the activity_log table"""
+    """Logs actions into the activity_log table with optional details"""
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
-        c.execute("INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)",
-                  (user_id, action, details))
+        c.execute(
+            "INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)",
+            (user_id, action, details)
+        )
         conn.commit()
         conn.close()
     except Exception as e:
+        # Do not crash the app for logging failures; print for dev visibility
         print(f"[LOGGER ERROR] {e}")
 
+
 def log_suspicious(activity_type, details="N/A"):
-    """Logs suspicious or failed actions"""
+    """Logs suspicious activity into a separate JSONL file"""
     entry = {
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "ip": request.remote_addr if has_request_context() else "unknown",
@@ -94,8 +106,8 @@ def log_suspicious(activity_type, details="N/A"):
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
     except Exception as e:
+        # best-effort: avoid crashing the request on logging error
         print(f"[SUSPICIOUS LOG ERROR] {e}")
-
 
 # Only import Postgres driver if needed (guarded)
 if os.getenv("DB_MODE") == "postgres" or os.getenv("DB_MODE") == "supabase":
@@ -2541,6 +2553,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
