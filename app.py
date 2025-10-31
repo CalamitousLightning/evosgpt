@@ -123,6 +123,7 @@ try:
 except ImportError:
     psycopg2 = None
 
+
 # --- DB Compatibility Layer ---
 _real_sqlite_connect = sqlite3.connect
 
@@ -176,7 +177,8 @@ else:
 
 # ---------- DB INIT (EVOSGPT Evolution Memory Edition) ----------
 def init_db():
-    db_mode = os.getenv("DB_MODE", "sqlite").lower()  # "sqlite" or "supabase"/"postgres"
+    db_mode = os.getenv("DB_MODE", "sqlite").lower()
+    print(f"🧠 Initializing EVOSGPT DB in mode: {db_mode.upper()}")
 
     if db_mode == "sqlite":
         os.makedirs("database", exist_ok=True)
@@ -208,46 +210,22 @@ def init_db():
             )
         """)
 
-        # ---------- CHAT LOGS ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS chat_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                guest_id INTEGER,
-                message TEXT,
-                response TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (guest_id) REFERENCES guests(id)
-            )
-        """)
-
-        # ---------- SYSTEM LOGS ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS system_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                action TEXT,
-                details TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-        """)
-
-        # ---------- MEMORY (Short-term chat storage) ----------
+        # ---------- MEMORY ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
-                role TEXT,                 -- 'user' or 'evosgpt'
+                guest_id INTEGER,
+                role TEXT,
                 content TEXT,
                 importance REAL DEFAULT 0.5,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id)
+                FOREIGN KEY(user_id) REFERENCES users(id),
+                FOREIGN KEY(guest_id) REFERENCES guests(id)
             )
         """)
 
-        # ---------- LONG MEMORY (Summarized long-term personality storage) ----------
+        # ---------- LONG MEMORY ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS long_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,21 +236,12 @@ def init_db():
             )
         """)
 
-        # ---------- GLOBAL MEMORY (Collective shared insights / world facts) ----------
+        # ---------- GLOBAL MEMORY ----------
         c.execute("""
             CREATE TABLE IF NOT EXISTS global_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 content TEXT,
                 importance REAL DEFAULT 0.5,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # ---------- ANALYTICS ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS analytics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tier TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -287,6 +256,15 @@ def init_db():
                 reference TEXT UNIQUE,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        # ---------- ANALYTICS ----------
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS analytics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tier TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
@@ -311,7 +289,6 @@ def init_db():
             )
         """)
 
-        # ---------- SEED COUPONS ----------
         c.execute("SELECT COUNT(*) FROM coupons")
         if c.fetchone()[0] == 0:
             c.executemany("INSERT INTO coupons (code, tier) VALUES (?, ?)", [
@@ -324,7 +301,6 @@ def init_db():
         conn.close()
         print("✅ SQLite DB initialized successfully with EVOSGPT adaptive memory support.")
 
-    # ---------- SUPABASE / POSTGRES ----------
     elif db_mode in ("supabase", "postgres"):
         if psycopg2 is None:
             raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
@@ -356,11 +332,12 @@ def init_db():
         )
         """)
 
-        # ---------- MEMORY (Short-term) ----------
+        # ---------- MEMORY ----------
         cur.execute("""
         CREATE TABLE IF NOT EXISTS memory (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id),
+            guest_id INTEGER REFERENCES guests(id),
             role TEXT,
             content TEXT,
             importance REAL DEFAULT 0.5,
@@ -429,7 +406,6 @@ def init_db():
         )
         """)
 
-        # ---------- SEED COUPONS ----------
         cur.execute("SELECT COUNT(*) FROM coupons")
         if cur.fetchone()[0] == 0:
             cur.executemany("INSERT INTO coupons (code, tier) VALUES (%s, %s)", [
@@ -444,17 +420,12 @@ def init_db():
         print("✅ Supabase/Postgres DB initialized successfully with EVOSGPT adaptive memory support.")
 
 
-
-# ---------- small helper for SQLite ALTERs (idempotent) ----------
+# ---------- small helper for SQLite ALTERs ----------
 def safe_alters_sqlite(cursor):
-    """
-    Run ALTER TABLE statements safely.
-    Keeps init_db() simple and idempotent for SQLite.
-    """
     alters = [
         "ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'Basic'",
         "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'",
-        "ALTER TABLE users ADD COLUMN email TEXT",  # optional, since schema already includes it
+        "ALTER TABLE users ADD COLUMN email TEXT",
         "ALTER TABLE users ADD COLUMN referral_code TEXT",
         "ALTER TABLE users ADD COLUMN referrals_used INTEGER DEFAULT 0",
         "ALTER TABLE users ADD COLUMN upgrade_expiry DATETIME"
@@ -463,22 +434,20 @@ def safe_alters_sqlite(cursor):
         try:
             cursor.execute(stmt)
         except sqlite3.OperationalError:
-            # already exists or not applicable
             pass
 
-    # ensure a unique index for referral_code
     try:
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
     except sqlite3.OperationalError:
         pass
 
-    # backfill defaults
     try:
         cursor.execute("UPDATE users SET tier = 'Basic' WHERE tier IS NULL")
         cursor.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
         cursor.execute("UPDATE users SET referrals_used = 0 WHERE referrals_used IS NULL")
     except Exception:
         pass
+
 
 def enforce_memory_limit(user_id, tier):
     """Trim per-user memory entries based on tier limits (safe, idempotent)."""
@@ -2506,6 +2475,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
