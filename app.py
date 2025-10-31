@@ -1159,59 +1159,31 @@ def index():
         referrals_used=referrals_used
     )
 
-
-# ---------- CHAT ROUTE + FORMATTERS (drop into your app.py) ----------
-import re
-import sqlite3
-import os
+# ---------- CHAT ROUTE (EVOSGPT WebCore — Hybrid Stable Build) ----------
+import re, sqlite3, os
 from flask import request, session, jsonify
 
 def auto_paragraph(text: str) -> str:
-    """
-    Force replies into readable Markdown paragraphs while preserving:
-    - fenced code blocks (```...```)
-    - existing list-lines that start with -, *, • or digit.
-    - headers (# ...) and quotes (> ...)
-    Splits into sentences and creates clean paragraphs.
-    """
+    """Formats replies cleanly with paragraph and code block preservation."""
     if not text:
         return ""
-
     text = text.replace("\r\n", "\n")
-
-    # Split out fenced code blocks
     parts = re.split(r'(```[\s\S]*?```)', text, flags=re.MULTILINE)
-    out_parts = []
-
+    result = []
     for idx, part in enumerate(parts):
-        if idx % 2 == 1:  # code block
-            out_parts.append(part.strip())
+        if idx % 2 == 1:
+            result.append(part.strip())
             continue
-
-        # Split into blocks by blank lines
-        segments = [seg.strip() for seg in re.split(r'\n\s*\n', part) if seg.strip()]
-        for seg in segments:
-            # Preserve lists, headers, quotes as-is
-            if re.search(r'^\s*([-*•]|\d+\.)\s+', seg, flags=re.MULTILINE) \
-               or re.match(r'^\s*(#+\s|> )', seg):
-                out_parts.append(seg)
-                continue
-
-            # Split into sentences
-            sentences = re.split(r'(?<=[.!?])\s+', seg)
-            for s in sentences:
-                s = s.strip()
-                if not s:
-                    continue
-                s = s.replace('\n', ' ')
-                out_parts.append(s)
-
-    # Join paragraphs with blank lines
-    result = '\n\n'.join([p for p in out_parts if p]).strip()
-    return result
+        for seg in filter(None, [s.strip() for s in re.split(r'\n\s*\n', part)]):
+            if re.search(r'^\s*([-*•]|\d+\.)\s+', seg) or re.match(r'^\s*(#+\s|> )', seg):
+                result.append(seg)
+            else:
+                for s in re.split(r'(?<=[.!?])\s+', seg):
+                    s = s.strip().replace('\n', ' ')
+                    if s: result.append(s)
+    return '\n\n'.join(result).strip()
 
 
-# ---------- CHAT ROUTE WITH EVOLVING MEMORY (Short + Long + Global) ----------
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
@@ -1220,34 +1192,30 @@ def chat():
     tier = session.get("tier", "Basic")
     reply = None
 
-    # --- Guest / User Setup ---
-    guest_id = None
+    # --- Guest Handling ---
+    guest_id = session.get("guest_id")
     if "user_id" not in session:
-        if "guest_id" not in session:
-            token = os.urandom(16).hex()
-            conn = sqlite3.connect("database/memory.db")
-            c = conn.cursor()
-            c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
-            guest_id = c.lastrowid
-            conn.commit()
-            conn.close()
-            session["guest_id"] = guest_id
-            session["guest_count"] = 0
-        else:
-            guest_id = session["guest_id"]
-
+        if not guest_id:
+            try:
+                conn = sqlite3.connect("database/memory.db")
+                c = conn.cursor()
+                token = os.urandom(16).hex()
+                c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
+                conn.commit()
+                guest_id = c.lastrowid
+                session["guest_id"] = guest_id
+                session["guest_count"] = 0
+                c.close(); conn.close()
+            except Exception as e:
+                log_suspicious("GuestCreateFail", str(e))
         guest_count = session.get("guest_count", 0)
         if guest_count >= 5:
-            return jsonify({
-                "reply": "🚪 Guest mode limit reached. Redirecting to registration…",
-                "redirect": "/register"
-            })
-
+            return jsonify({"reply": "🚪 Guest mode limit reached. Redirecting to registration…", "redirect": "/register"})
         session["guest_count"] = guest_count + 1
         if session["guest_count"] == 4:
             return jsonify({"reply": "⚠ You have 1 free chat left. Please register or log in to continue."})
 
-    # --- Founder Easter Egg ---
+    # --- Founder Tier Easter Egg ---
     if "user_id" in session:
         seq = session.get("founder_seq", 0)
         if seq == 0 and ui == "evosgpt where you created":
@@ -1272,11 +1240,10 @@ def chat():
                     conn.commit()
             except Exception as e:
                 log_suspicious("FounderLogoutFail", str(e))
-        else:
-            if seq > 0 and ui not in ["evosgpt where you created", "ghanaherewecome", "nameless"]:
-                session["founder_seq"] = 0
+        elif seq > 0:
+            session["founder_seq"] = 0
 
-    # --- 🧠 Retrieve Memory Context ---
+    # --- Memory Context ---
     memory_context = ""
     try:
         conn = sqlite3.connect("database/memory.db")
@@ -1284,22 +1251,14 @@ def chat():
         if "user_id" in session:
             uid = session["user_id"]
             limit = 5 if tier == "Basic" else 10 if tier == "Pro" else 15
-            c.execute("""
-                SELECT role, content FROM memory
-                WHERE user_id = ? ORDER BY id DESC LIMIT ?
-            """, (uid, limit))
+            c.execute("SELECT role, content FROM memory WHERE user_id = ? ORDER BY id DESC LIMIT ?", (uid, limit))
         else:
-            c.execute("""
-                SELECT role, content FROM memory
-                WHERE guest_id = ? ORDER BY id DESC LIMIT 5
-            """, (guest_id,))
+            c.execute("SELECT role, content FROM memory WHERE guest_id = ? ORDER BY id DESC LIMIT 5", (guest_id,))
         rows = c.fetchall()
 
-        # Global recall
+        # global + long-term
         c.execute("SELECT content FROM global_memory ORDER BY importance DESC LIMIT 3")
         global_rows = [r[0] for r in c.fetchall()]
-
-        # Long-term summary recall
         long_summary = ""
         if "user_id" in session:
             c.execute("SELECT summary FROM long_memory WHERE user_id = ?", (session["user_id"],))
@@ -1307,30 +1266,20 @@ def chat():
             if row and row[0]:
                 long_summary = f"\n[Long-Term Personality Memory]\n{row[0]}"
 
-        conn.close()
-
-        # Combine personal + long-term + global context
-        history_lines = []
-        for role, content in reversed(rows):
-            prefix = "User" if role == "user" else "EVOSGPT"
-            history_lines.append(f"{prefix}: {content}")
-
-        if long_summary:
-            history_lines.append(long_summary)
-        if global_rows:
-            history_lines.append("\n[Global Memory]\n" + "\n".join(global_rows))
-
+        c.close(); conn.close()
+        history_lines = [f"{'User' if r=='user' else 'EVOSGPT'}: {t}" for r, t in reversed(rows)]
+        if long_summary: history_lines.append(long_summary)
+        if global_rows: history_lines.append("\n[Global Memory]\n" + "\n".join(global_rows))
         memory_context = "\n".join(history_lines)
     except Exception as e:
         log_suspicious("MemoryReadFail", str(e))
 
-    # --- 🔄 AI Generation ---
+    # --- AI Processing ---
     if reply is None:
         try:
             prompt = f"""
-You are EVOSGPT — an adaptive, evolving AI assistant.
-Use the conversation memory, personality summary, and global context below
-to maintain continuity and respond with awareness of past interactions.
+You are EVOSGPT — an adaptive AI assistant.
+Use prior memory and context below to maintain continuity.
 
 [Memory Context]
 {memory_context}
@@ -1341,34 +1290,40 @@ to maintain continuity and respond with awareness of past interactions.
             raw_reply = route_ai_call(tier, prompt)
             reply = auto_paragraph(raw_reply)
         except Exception as e:
-            log_suspicious("LLMError", str(e))
+            log_suspicious("AIProcessingFail", str(e))
             reply = "⚠️ System error while processing your message."
 
-    # --- 💾 Save chat into memory ---
+    # --- Save Message ---
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
         if "user_id" in session:
             uid = session["user_id"]
-            c.execute("INSERT INTO memory (user_id, role, content, importance) VALUES (?, ?, ?, ?)",
-                      (uid, "user", user_msg, 0.5))
-            c.execute("INSERT INTO memory (user_id, role, content, importance) VALUES (?, ?, ?, ?)",
-                      (uid, "evosgpt", reply, 0.5))
+            c.executemany("INSERT INTO memory (user_id, role, content, importance) VALUES (?, ?, ?, ?)", [
+                (uid, "user", user_msg, 0.5),
+                (uid, "evosgpt", reply, 0.5)
+            ])
             conn.commit()
             enforce_memory_limit(uid, tier)
         elif guest_id:
-            c.execute("INSERT INTO memory (guest_id, role, content) VALUES (?, ?, ?)", (guest_id, "user", user_msg))
-            c.execute("INSERT INTO memory (guest_id, role, content) VALUES (?, ?, ?)", (guest_id, "evosgpt", reply))
+            c.executemany("INSERT INTO memory (guest_id, role, content) VALUES (?, ?, ?)", [
+                (guest_id, "user", user_msg),
+                (guest_id, "evosgpt", reply)
+            ])
             conn.commit()
-        conn.close()
+        c.close(); conn.close()
     except Exception as e:
         log_suspicious("ChatInsertFail", str(e))
 
-    # --- 🔁 Auto-summarize every 5–10 chats ---
+    # --- Summarization Trigger ---
     if "user_id" in session:
-        summarize_user_memory(session["user_id"])
+        try:
+            summarize_user_memory(session["user_id"])
+        except Exception as e:
+            log_suspicious("SummarizeFail", str(e))
 
     return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
+
 
 
 
@@ -2551,6 +2506,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
