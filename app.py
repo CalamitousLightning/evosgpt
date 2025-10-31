@@ -289,6 +289,7 @@ def init_db():
             )
         """)
 
+        # ---------- SEED COUPONS ----------
         c.execute("SELECT COUNT(*) FROM coupons")
         if c.fetchone()[0] == 0:
             c.executemany("INSERT INTO coupons (code, tier) VALUES (?, ?)", [
@@ -301,6 +302,7 @@ def init_db():
         conn.close()
         print("✅ SQLite DB initialized successfully with EVOSGPT adaptive memory support.")
 
+    # ---------- SUPABASE / POSTGRES ----------
     elif db_mode in ("supabase", "postgres"):
         if psycopg2 is None:
             raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
@@ -343,6 +345,30 @@ def init_db():
             importance REAL DEFAULT 0.5,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+        """)
+
+        # --- 🔄 SCHEMA FIX: auto-migrate old columns ---
+        # (handles user_input/bot_response → role/content)
+        cur.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'memory' AND column_name = 'user_input'
+            ) THEN
+                BEGIN
+                    ALTER TABLE memory ADD COLUMN IF NOT EXISTS role TEXT;
+                    ALTER TABLE memory ADD COLUMN IF NOT EXISTS content TEXT;
+                    UPDATE memory SET role='user', content=user_input WHERE role IS NULL AND user_input IS NOT NULL;
+                    UPDATE memory SET role='evosgpt', content=bot_response WHERE role IS NULL AND bot_response IS NOT NULL;
+                    ALTER TABLE memory DROP COLUMN IF EXISTS user_input;
+                    ALTER TABLE memory DROP COLUMN IF EXISTS bot_response;
+                    ALTER TABLE memory DROP COLUMN IF EXISTS system_msg;
+                EXCEPTION WHEN OTHERS THEN
+                    RAISE NOTICE 'Memory migration skipped (columns already updated)';
+                END;
+            END IF;
+        END$$;
         """)
 
         # ---------- LONG MEMORY ----------
@@ -406,6 +432,7 @@ def init_db():
         )
         """)
 
+        # ---------- SEED COUPONS ----------
         cur.execute("SELECT COUNT(*) FROM coupons")
         if cur.fetchone()[0] == 0:
             cur.executemany("INSERT INTO coupons (code, tier) VALUES (%s, %s)", [
@@ -417,7 +444,7 @@ def init_db():
         conn.commit()
         cur.close()
         conn.close()
-        print("✅ Supabase/Postgres DB initialized successfully with EVOSGPT adaptive memory support.")
+        print("✅ Supabase/Postgres DB initialized successfully with EVOSGPT adaptive memory + migration support.")
 
 
 # ---------- small helper for SQLite ALTERs ----------
@@ -2475,6 +2502,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
