@@ -1155,12 +1155,15 @@ def index():
         referrals_used=referrals_used
     )
 
-# ---------- CHAT ROUTE (EVOSGPT WebCore — Hybrid Stable Build) ----------
-import re, sqlite3, os
+# ---------- CHAT ROUTE (EVOSGPT WebCore — Supabase Safe Write Edition) ----------
+import re, sqlite3, os, requests, json
 from flask import request, session, jsonify
 
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+DB_MODE = os.getenv("DB_MODE", "sqlite").lower()
+
 def auto_paragraph(text: str) -> str:
-    """Formats replies cleanly with paragraph and code block preservation."""
     if not text:
         return ""
     text = text.replace("\r\n", "\n")
@@ -1176,7 +1179,8 @@ def auto_paragraph(text: str) -> str:
             else:
                 for s in re.split(r'(?<=[.!?])\s+', seg):
                     s = s.strip().replace('\n', ' ')
-                    if s: result.append(s)
+                    if s:
+                        result.append(s)
     return '\n\n'.join(result).strip()
 
 
@@ -1188,7 +1192,7 @@ def chat():
     tier = session.get("tier", "Basic")
     reply = None
 
-    # --- Guest Handling ---
+    # --- Guest Setup ---
     guest_id = session.get("guest_id")
     if "user_id" not in session:
         if not guest_id:
@@ -1211,7 +1215,7 @@ def chat():
         if session["guest_count"] == 4:
             return jsonify({"reply": "⚠ You have 1 free chat left. Please register or log in to continue."})
 
-    # --- Founder Tier Easter Egg ---
+    # --- Founder Easter Egg ---
     if "user_id" in session:
         seq = session.get("founder_seq", 0)
         if seq == 0 and ui == "evosgpt where you created":
@@ -1239,7 +1243,7 @@ def chat():
         elif seq > 0:
             session["founder_seq"] = 0
 
-    # --- Memory Context ---
+    # --- Memory Recall ---
     memory_context = ""
     try:
         conn = sqlite3.connect("database/memory.db")
@@ -1252,7 +1256,7 @@ def chat():
             c.execute("SELECT role, content FROM memory WHERE guest_id = ? ORDER BY id DESC LIMIT 5", (guest_id,))
         rows = c.fetchall()
 
-        # global + long-term
+        # global + long-term recall
         c.execute("SELECT content FROM global_memory ORDER BY importance DESC LIMIT 3")
         global_rows = [r[0] for r in c.fetchall()]
         long_summary = ""
@@ -1261,16 +1265,16 @@ def chat():
             row = c.fetchone()
             if row and row[0]:
                 long_summary = f"\n[Long-Term Personality Memory]\n{row[0]}"
-
         c.close(); conn.close()
-        history_lines = [f"{'User' if r=='user' else 'EVOSGPT'}: {t}" for r, t in reversed(rows)]
+
+        history_lines = [f"{'User' if r == 'user' else 'EVOSGPT'}: {t}" for r, t in reversed(rows)]
         if long_summary: history_lines.append(long_summary)
         if global_rows: history_lines.append("\n[Global Memory]\n" + "\n".join(global_rows))
         memory_context = "\n".join(history_lines)
     except Exception as e:
         log_suspicious("MemoryReadFail", str(e))
 
-    # --- AI Processing ---
+    # --- AI Generation ---
     if reply is None:
         try:
             prompt = f"""
@@ -1289,12 +1293,13 @@ Use prior memory and context below to maintain continuity.
             log_suspicious("AIProcessingFail", str(e))
             reply = "⚠️ System error while processing your message."
 
-    # --- Save Message ---
+    # --- Save Messages (SQL → REST fallback) ---
     try:
+        uid = session.get("user_id")
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
-        if "user_id" in session:
-            uid = session["user_id"]
+
+        if uid:
             c.executemany("INSERT INTO memory (user_id, role, content, importance) VALUES (?, ?, ?, ?)", [
                 (uid, "user", user_msg, 0.5),
                 (uid, "evosgpt", reply, 0.5)
@@ -1308,10 +1313,35 @@ Use prior memory and context below to maintain continuity.
             ])
             conn.commit()
         c.close(); conn.close()
-    except Exception as e:
-        log_suspicious("ChatInsertFail", str(e))
 
-    # --- Summarization Trigger ---
+    except Exception as sql_err:
+        log_suspicious("ChatInsertFail", str(sql_err))
+
+        # ✅ Supabase REST fallback
+        if DB_MODE in ("supabase", "postgres") and SUPABASE_URL and SUPABASE_KEY:
+            try:
+                headers = {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": "application/json",
+                }
+                payloads = []
+                if "user_id" in session:
+                    payloads = [
+                        {"user_id": uid, "role": "user", "content": user_msg, "importance": 0.5},
+                        {"user_id": uid, "role": "evosgpt", "content": reply, "importance": 0.5},
+                    ]
+                elif guest_id:
+                    payloads = [
+                        {"guest_id": guest_id, "role": "user", "content": user_msg},
+                        {"guest_id": guest_id, "role": "evosgpt", "content": reply},
+                    ]
+                for p in payloads:
+                    requests.post(f"{SUPABASE_URL}/rest/v1/memory", headers=headers, data=json.dumps(p))
+            except Exception as rest_err:
+                log_suspicious("SupabaseRESTFail", str(rest_err))
+
+    # --- Auto Summarization ---
     if "user_id" in session:
         try:
             summarize_user_memory(session["user_id"])
@@ -1319,7 +1349,6 @@ Use prior memory and context below to maintain continuity.
             log_suspicious("SummarizeFail", str(e))
 
     return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
-
 
 
 
@@ -2502,6 +2531,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
