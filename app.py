@@ -1135,169 +1135,52 @@ def index():
         referrals_used=referrals_used
     )
 
-# =========================================================
-#  EVOSGPT v0 — WebCore (Long + Global Memory Integrated)
-# =========================================================
-import os, re, json, random, datetime, sqlite3, uuid, requests
-from flask import Flask, request, session, jsonify, render_template, redirect, url_for
+# ---------- CHAT ROUTE (EV-Main + Long & Global Memory + Supabase Sync) ----------
+import os, re, sqlite3, json, requests
+from flask import request, session, jsonify
 
-app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "evosgpt_secret")
+# === Supabase / DB Compatibility Patch ===
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
+def supabase_connect(_=None):
+    if not psycopg2:
+        raise RuntimeError("psycopg2 required for Supabase mode")
+    conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
+    return conn
+
+# 🔧 Replace sqlite3.connect dynamically if DB_MODE indicates Supabase
+if os.getenv("DB_MODE", "sqlite").lower() in ("supabase", "postgres"):
+    sqlite3.connect = supabase_connect
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 DB_MODE = os.getenv("DB_MODE", "sqlite").lower()
 
-# ---------- LOGGING ----------
-def log_suspicious(tag, details):
-    print(f"[{tag}] {details}")
-
-# ---------- UTILITIES ----------
-def get_local_db():
-    try:
-        os.makedirs("database", exist_ok=True)
-        return sqlite3.connect("database/memory.db")
-    except Exception as e:
-        log_suspicious("LocalDBError", str(e))
-        return None
-
+# === Helper: auto_paragraph ===
 def auto_paragraph(text: str) -> str:
     if not text:
         return ""
     text = text.replace("\r\n", "\n")
     parts = re.split(r'(```[\s\S]*?```)', text, flags=re.MULTILINE)
-    result = []
+    out_parts = []
     for idx, part in enumerate(parts):
         if idx % 2 == 1:
-            result.append(part.strip())
+            out_parts.append(part.strip())
             continue
-        for seg in filter(None, [s.strip() for s in re.split(r'\n\s*\n', part)]):
+        segs = [s.strip() for s in re.split(r'\n\s*\n', part) if s.strip()]
+        for seg in segs:
             if re.search(r'^\s*([-*•]|\d+\.)\s+', seg) or re.match(r'^\s*(#+\s|> )', seg):
-                result.append(seg)
-            else:
-                for s in re.split(r'(?<=[.!?])\s+', seg):
-                    s = s.strip().replace('\n', ' ')
-                    if s:
-                        result.append(s)
-    return '\n\n'.join(result).strip()
+                out_parts.append(seg)
+                continue
+            for s in re.split(r'(?<=[.!?])\s+', seg):
+                if s.strip():
+                    out_parts.append(s.strip())
+    return "\n\n".join(out_parts).strip()
 
-# ---------- INTELLIGENT MEMORY MANAGEMENT ----------
-def enforce_memory_limit(user_id, tier):
-    """Tier-based soft limit to prevent DB bloat."""
-    limits = {"Basic": 50, "Core": 200, "Pro": 800, "King": 1500, "Founder": 5000}
-    limit = limits.get(tier, 100)
-    conn = get_local_db()
-    if not conn: return
-    try:
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM memory WHERE user_id=?", (user_id,))
-        total = c.fetchone()[0]
-        if total > limit * 2:
-            to_delete = total - limit
-            c.execute("""
-                DELETE FROM memory
-                WHERE id IN (SELECT id FROM memory WHERE user_id=? ORDER BY id ASC LIMIT ?)
-            """, (user_id, to_delete))
-            conn.commit()
-    except Exception as e:
-        log_suspicious("EnforceMemoryLimitFail", str(e))
-    finally:
-        conn.close()
 
-def summarize_user_memory(user_id, tier="Basic", force=False):
-    """Condense user’s chat history into evolving long_memory summary."""
-    try:
-        conn = get_local_db()
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM memory WHERE user_id=?", (user_id,))
-        total = c.fetchone()[0]
-        conn.close()
-
-        thresholds = {"Basic": 25, "Core": 15, "Pro": 8, "King": 5, "Founder": random.choice([1, 2])}
-        trigger = thresholds.get(tier, 10)
-        if not force and total % trigger != 0:
-            return
-
-        conn = get_local_db()
-        c = conn.cursor()
-        c.execute("SELECT user_input, bot_response FROM memory WHERE user_id=? ORDER BY id DESC LIMIT 12", (user_id,))
-        rows = c.fetchall()
-        conn.close()
-        if not rows: return
-
-        convo = "\n".join([f"User: {u}\nAI: {b}" for u, b in reversed(rows)])
-        prompt = f"""
-You are EVOSGPT — a reflective intelligence evolving through interaction.
-Summarize the following dialogue in one calm paragraph capturing personality, intent, and goals:
-{convo}
-"""
-        summary = route_ai_call("Core", prompt).strip()
-
-        conn = get_local_db()
-        c = conn.cursor()
-        c.execute("SELECT summary FROM long_memory WHERE user_id=?", (user_id,))
-        existing = c.fetchone()
-
-        if existing and existing[0]:
-            merge_prompt = f"""
-Merge these two summaries into one factual description of the user.
-Avoid repetition or exaggeration.
-Old: {existing[0]}
-New: {summary}
-"""
-            merged = route_ai_call("Core", merge_prompt).strip()
-            c.execute("UPDATE long_memory SET summary=?, last_updated=CURRENT_TIMESTAMP WHERE user_id=?",
-                      (merged, user_id))
-        else:
-            c.execute("""
-                INSERT INTO long_memory (user_id, summary, last_updated)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(user_id) DO UPDATE SET summary=excluded.summary;
-            """, (user_id, summary))
-        conn.commit()
-        conn.close()
-        print(f"🧠 Long memory evolved for user {user_id} ({tier})")
-
-    except Exception as e:
-        log_suspicious("SummarizeUserMemoryFail", str(e))
-
-# ---------- GLOBAL REFLECTION ----------
-def reflect_global_context():
-    """Daily world-state evolution: summarizes patterns from all users."""
-    try:
-        conn = get_local_db()
-        c = conn.cursor()
-        c.execute("""
-            SELECT user_input FROM memory 
-            WHERE time_added > datetime('now', '-1 day')
-        """)
-        recent = [r[0] for r in c.fetchall()]
-        conn.close()
-        if not recent: return
-
-        joined = "\n".join(recent[-200:])
-        prompt = f"""
-You are EVOSGPT observing global human activity.
-Summarize the most common moods, themes, and goals expressed today.
-Keep it factual and neutral.
-Data:
-{joined}
-"""
-        summary = route_ai_call("Core", prompt).strip()
-
-        conn = get_local_db()
-        c = conn.cursor()
-        c.execute("""
-            INSERT INTO global_memory (content, importance, created_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-        """, (summary, 3))
-        conn.commit()
-        conn.close()
-        print("🌍 Global context updated.")
-    except Exception as e:
-        log_suspicious("GlobalReflectionFail", str(e))
-
-# ---------- CHAT ROUTE ----------
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
@@ -1307,58 +1190,101 @@ def chat():
     reply = None
     guest_id = None
 
-    # Guest logic
+    # --- Guest mode ---
     if "user_id" not in session:
         if "guest_id" not in session:
             token = os.urandom(16).hex()
-            conn = get_local_db()
+            conn = sqlite3.connect("database/memory.db")
             c = conn.cursor()
             c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
             guest_id = c.lastrowid
-            conn.commit(); conn.close()
+            conn.commit()
+            conn.close()
             session["guest_id"] = guest_id
             session["guest_count"] = 0
         else:
             guest_id = session["guest_id"]
 
-        session["guest_count"] = session.get("guest_count", 0) + 1
-        if session["guest_count"] > 5:
-            return jsonify({"reply": "🚪 Guest limit reached. Register to continue.", "redirect": "/register"})
+        guest_count = session.get("guest_count", 0)
+        if guest_count >= 5:
+            return jsonify({"reply": "🚪 Guest mode limit reached.", "redirect": "/register"})
+        session["guest_count"] = guest_count + 1
+        if session["guest_count"] == 4:
+            return jsonify({"reply": "⚠ You have 1 free chat left. Please register or log in to continue."})
 
-    # Memory recall
+    # --- Founder unlock sequence ---
+    if "user_id" in session:
+        seq = session.get("founder_seq", 0)
+        if seq == 0 and ui == "evosgpt where you created":
+            reply = "lab"; session["founder_seq"] = 1
+        elif seq == 1 and ui == "ghanaherewecome":
+            reply = "are you coming to Ghana?"; session["founder_seq"] = 2
+        elif seq == 2 and ui == "nameless":
+            reply = "[SYSTEM] Founder tier unlocked. Welcome, hidden user."
+            session.update({"founder_seq": 0, "tier": "Founder"})
+            try:
+                conn = sqlite3.connect("database/memory.db")
+                c = conn.cursor()
+                c.execute("UPDATE users SET tier=? WHERE id=?", ("Founder", session["user_id"]))
+                conn.commit(); conn.close()
+            except Exception as e:
+                log_suspicious("FounderUnlockFail", str(e))
+        elif tier == "Founder" and ui == "logout evosgpt":
+            reply = "[SYSTEM] Founder mode deactivated. Returning to Basic tier."
+            session["tier"] = "Basic"
+            try:
+                conn = sqlite3.connect("database/memory.db")
+                c = conn.cursor()
+                c.execute("UPDATE users SET tier=? WHERE id=?", ("Basic", session["user_id"]))
+                conn.commit(); conn.close()
+            except Exception as e:
+                log_suspicious("FounderLogoutFail", str(e))
+        elif seq > 0:
+            session["founder_seq"] = 0
+
+    # --- Memory Recall (optional long/global memory) ---
     long_summary, global_context = "", ""
     try:
-        conn = get_local_db(); c = conn.cursor()
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
         if "user_id" in session:
             c.execute("SELECT summary FROM long_memory WHERE user_id=? LIMIT 1", (session["user_id"],))
             r = c.fetchone()
-            if r and r[0]: long_summary = r[0]
-        c.execute("SELECT content FROM global_memory ORDER BY id DESC LIMIT 2")
-        g = c.fetchall()
-        if g: global_context = "\n".join([r[0] for r in g])
+            if r and r[0]:
+                long_summary = r[0]
+        c.execute("SELECT content FROM global_memory ORDER BY importance DESC, timestamp DESC LIMIT 2")
+        rows = c.fetchall()
+        if rows:
+            global_context = "\n".join([r[0] for r in rows])
         conn.close()
     except Exception as e:
         log_suspicious("MemoryRecallFail", str(e))
 
-    # AI call
-    try:
-        prefix = ""
-        if long_summary: prefix += f"[User Memory]: {long_summary}\n"
-        if global_context: prefix += f"[Global]: {global_context}\n"
-        raw_reply = route_ai_call(tier, prefix + user_msg)
-        reply = auto_paragraph(raw_reply)
-    except Exception as e:
-        log_suspicious("LLMError", str(e))
-        reply = f"⚠️ System Error\n> {user_msg}"
+    # --- AI Router ---
+    if reply is None:
+        try:
+            memory_prefix = ""
+            if long_summary:
+                memory_prefix += f"[User Summary Memory]: {long_summary}\n"
+            if global_context:
+                memory_prefix += f"[Global Memory]: {global_context}\n"
+            prompt = f"{memory_prefix}{user_msg}"
+            raw_reply = route_ai_call(tier, prompt)
+            reply = auto_paragraph(raw_reply)
+        except Exception as e:
+            log_suspicious("LLMError", str(e))
+            reply = f"⚠️ System Error\n> {user_msg}"
 
-    # Save chat
+    # --- Save chat ---
     try:
-        conn = get_local_db(); c = conn.cursor()
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
         if "user_id" in session:
             uid = session["user_id"]
             c.execute("INSERT INTO memory (user_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
                       (uid, user_msg, reply))
-            conn.commit(); enforce_memory_limit(uid, tier); summarize_user_memory(uid, tier)
+            conn.commit()
+            enforce_memory_limit(uid, tier)
         elif guest_id:
             c.execute("INSERT INTO memory (guest_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
                       (guest_id, user_msg, reply))
@@ -1367,7 +1293,53 @@ def chat():
     except Exception as e:
         log_suspicious("ChatInsertFail", str(e))
 
+    # --- Mirror to Supabase (for extra safety) ---
+    if DB_MODE in ("supabase", "postgres") and SUPABASE_URL and SUPABASE_KEY:
+        try:
+            headers = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "user_id": session.get("user_id"),
+                "guest_id": guest_id,
+                "user_input": user_msg,
+                "bot_response": reply,
+                "system_msg": 0,
+            }
+            res = requests.post(f"{SUPABASE_URL}/rest/v1/memory", headers=headers, data=json.dumps(payload))
+            if res.status_code >= 300:
+                log_suspicious("SupabaseMirrorFail", f"{res.status_code}: {res.text}")
+        except Exception as e:
+            log_suspicious("SupabaseMirrorFail", str(e))
+
+    # --- Auto Summarize into long_memory ---
+    try:
+        if "user_id" in session:
+            uid = session["user_id"]
+            conn = sqlite3.connect("database/memory.db")
+            c = conn.cursor()
+            c.execute("SELECT COUNT(*) FROM memory WHERE user_id=?", (uid,))
+            count = c.fetchone()[0]
+            if count % 10 == 0 and count > 0:  # every 10 messages
+                c.execute("SELECT user_input, bot_response FROM memory WHERE user_id=? ORDER BY id DESC LIMIT 20", (uid,))
+                rows = c.fetchall()
+                convo = "\n".join([f"User: {u}\nAI: {b}" for u, b in rows])
+                summary_prompt = f"Summarize this conversation in 1-2 sentences:\n{convo}"
+                summary = route_ai_call("System", summary_prompt)
+                c.execute("""
+                    INSERT INTO long_memory (user_id, summary, last_updated)
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(user_id) DO UPDATE SET summary=excluded.summary, last_updated=CURRENT_TIMESTAMP;
+                """, (uid, summary))
+                conn.commit()
+            conn.close()
+    except Exception as e:
+        log_suspicious("LongMemoryUpdateFail", str(e))
+
     return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
+
 
 
 
@@ -2548,6 +2520,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
