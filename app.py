@@ -72,9 +72,20 @@ app.config.update(
 )
 
 
+# ---------- EVOSGPT DB INIT — Self-Healing + Supabase Sync Layer ----------
+import os, sqlite3, re, json, requests
+from datetime import datetime
+from flask import request, has_request_context
+
+# ---------- GLOBAL CONFIG ----------
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL", "")
+DB_MODE = os.getenv("DB_MODE", "sqlite").lower()
+
 # ---------- GLOBAL LOGGER ----------
 def log_action(user_id, action, details="N/A"):
-    """Logs actions into the activity_log table with optional details"""
+    """Logs actions into the activity_log table (local + Supabase mirror)"""
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
@@ -85,12 +96,31 @@ def log_action(user_id, action, details="N/A"):
         conn.commit()
         conn.close()
     except Exception as e:
-        # Do not crash the app for logging failures; print for dev visibility
         print(f"[LOGGER ERROR] {e}")
+
+    # Supabase mirror
+    if DB_MODE in ("supabase", "postgres") and SUPABASE_URL and SUPABASE_KEY:
+        try:
+            requests.post(
+                f"{SUPABASE_URL}/rest/v1/activity_log",
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": "application/json",
+                },
+                data=json.dumps({
+                    "user_id": user_id,
+                    "action": action,
+                    "details": details,
+                }),
+                timeout=5
+            )
+        except Exception as e:
+            print(f"[REMOTE LOG FAIL] {e}")
 
 
 def log_suspicious(activity_type, details="N/A"):
-    """Logs suspicious activity into a separate JSONL file"""
+    """Logs suspicious or system anomalies"""
     entry = {
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "ip": request.remote_addr if has_request_context() else "unknown",
@@ -99,32 +129,18 @@ def log_suspicious(activity_type, details="N/A"):
         "details": details
     }
     os.makedirs("logs", exist_ok=True)
-    path = os.path.join("logs", "suspicious.jsonl")
     try:
-        with open(path, "a", encoding="utf-8") as f:
+        with open("logs/suspicious.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
     except Exception as e:
-        # best-effort: avoid crashing the request on logging error
         print(f"[SUSPICIOUS LOG ERROR] {e}")
 
-# Only import Postgres driver if needed (guarded)
-if os.getenv("DB_MODE") == "postgres" or os.getenv("DB_MODE") == "supabase":
-    try:
-        import psycopg2  # needed only if using Supabase/Postgres
-        from psycopg2 import sql
-    except Exception:
-        psycopg2 = None
-
-
-# ---------- DB ADAPTER + INIT ----------
-import os, sqlite3, re
+# ---------- DB ADAPTER ----------
 try:
     import psycopg2
 except ImportError:
     psycopg2 = None
 
-
-# --- DB Compatibility Layer ---
 _real_sqlite_connect = sqlite3.connect
 
 class CompatCursor:
@@ -134,7 +150,6 @@ class CompatCursor:
 
     def execute(self, sql, params=None):
         if self.db_mode in ("supabase", "postgres"):
-            # Convert SQLite-style "?" to Postgres-style "%s"
             sql = re.sub(r"\?", "%s", sql)
         return self.cursor.execute(sql, params or ())
 
@@ -160,157 +175,148 @@ class CompatConnection:
 
 
 def supabase_connect(_=None):
+    """Create a Postgres-compatible connection for Supabase mode"""
     if psycopg2 is None:
         raise RuntimeError("psycopg2 is required for Supabase/Postgres mode")
-    conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
-    return CompatConnection(conn, "supabase")
+    return CompatConnection(psycopg2.connect(SUPABASE_DB_URL), "supabase")
 
 
-# Monkey-patch sqlite3.connect → supabase or real sqlite
-if os.getenv("DB_MODE", "sqlite").lower() in ("supabase", "postgres"):
+# ---------- SMART CONNECT WRAPPER ----------
+if DB_MODE in ("supabase", "postgres"):
     sqlite3.connect = supabase_connect
 else:
     def sqlite_connect_wrapper(path, *args, **kwargs):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         return CompatConnection(_real_sqlite_connect(path, *args, **kwargs), "sqlite")
     sqlite3.connect = sqlite_connect_wrapper
 
 
-# ---------- DB INIT (EVOSGPT Evolution Memory Edition) ----------
+# ---------- INIT FUNCTION ----------
 def init_db():
-    db_mode = os.getenv("DB_MODE", "sqlite").lower()
+    """Initialize EVOSGPT adaptive DB and verify Supabase sync"""
+    db_mode = DB_MODE
     print(f"🧠 Initializing EVOSGPT DB in mode: {db_mode.upper()}")
 
     if db_mode == "sqlite":
         os.makedirs("database", exist_ok=True)
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
-
-        # ---------- USERS ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                email TEXT,
-                password TEXT NOT NULL,
-                tier TEXT DEFAULT 'Basic',
-                status TEXT DEFAULT 'active',
-                referral_code TEXT UNIQUE,
-                referrals_used INTEGER DEFAULT 0,
-                upgrade_expiry DATETIME,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # ---------- GUESTS ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS guests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_token TEXT UNIQUE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # ---------- MEMORY ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS memory (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                guest_id INTEGER,
-                role TEXT,
-                content TEXT,
-                importance REAL DEFAULT 0.5,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id),
-                FOREIGN KEY(guest_id) REFERENCES guests(id)
-            )
-        """)
-
-        # ---------- LONG MEMORY ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS long_memory (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER UNIQUE,
-                summary TEXT,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-        """)
-
-        # ---------- GLOBAL MEMORY ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS global_memory (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content TEXT,
-                importance REAL DEFAULT 0.5,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # ---------- PURCHASES ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS purchases (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                tier TEXT,
-                payment_method TEXT,
-                reference TEXT UNIQUE,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        """)
-
-        # ---------- ANALYTICS ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS analytics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                tier TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        # ---------- COUPONS ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS coupons (
-                code TEXT PRIMARY KEY,
-                tier TEXT,
-                used INTEGER DEFAULT 0
-            )
-        """)
-
-        # ---------- ACTIVITY LOG ----------
-        c.execute("""
-            CREATE TABLE IF NOT EXISTS activity_log (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                action TEXT,
-                details TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            )
-        """)
-
-        # ---------- SEED COUPONS ----------
-        c.execute("SELECT COUNT(*) FROM coupons")
-        if c.fetchone()[0] == 0:
-            c.executemany("INSERT INTO coupons (code, tier) VALUES (?, ?)", [
-                ("FREECORE", "Core"),
-                ("KINGME", "King"),
-                ("BOOSTPRO", "Pro")
-            ])
-
+        _create_all_tables_sqlite(c)
         conn.commit()
         conn.close()
-        print("✅ SQLite DB initialized successfully with EVOSGPT adaptive memory support.")
+        print("✅ SQLite DB initialized successfully with adaptive memory support.")
 
-    # ---------- SUPABASE / POSTGRES ----------
     elif db_mode in ("supabase", "postgres"):
         if psycopg2 is None:
-            raise RuntimeError("psycopg2 is required for Postgres/Supabase mode but not installed.")
-        conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
+            raise RuntimeError("psycopg2 is required for Supabase/Postgres mode.")
+        conn = psycopg2.connect(SUPABASE_DB_URL)
         cur = conn.cursor()
+        _create_all_tables_postgres(cur)
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("✅ Supabase/Postgres DB initialized successfully with adaptive memory + sync verification.")
 
-        # ---------- USERS ----------
-        cur.execute("""
+    _verify_supabase_connection()
+
+
+# ---------- CREATE TABLE HELPERS ----------
+def _create_all_tables_sqlite(c):
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT,
+            password TEXT NOT NULL,
+            tier TEXT DEFAULT 'Basic',
+            status TEXT DEFAULT 'active',
+            referral_code TEXT UNIQUE,
+            referrals_used INTEGER DEFAULT 0,
+            upgrade_expiry DATETIME,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS guests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_token TEXT UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            guest_id INTEGER,
+            role TEXT,
+            content TEXT,
+            importance REAL DEFAULT 0.5,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id),
+            FOREIGN KEY(guest_id) REFERENCES guests(id)
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS long_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER UNIQUE,
+            summary TEXT,
+            last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS global_memory (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT,
+            importance REAL DEFAULT 0.5,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS purchases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            tier TEXT,
+            payment_method TEXT,
+            reference TEXT UNIQUE,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS analytics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tier TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS coupons (
+            code TEXT PRIMARY KEY,
+            tier TEXT,
+            used INTEGER DEFAULT 0
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS activity_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            action TEXT,
+            details TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+
+def _create_all_tables_postgres(cur):
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username TEXT UNIQUE NOT NULL,
@@ -323,19 +329,15 @@ def init_db():
             upgrade_expiry TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
-
-        # ---------- GUESTS ----------
-        cur.execute("""
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS guests (
             id SERIAL PRIMARY KEY,
             session_token TEXT UNIQUE NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
-
-        # ---------- MEMORY ----------
-        cur.execute("""
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS memory (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id),
@@ -345,54 +347,24 @@ def init_db():
             importance REAL DEFAULT 0.5,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
-
-        # --- 🔄 SCHEMA FIX: auto-migrate old columns ---
-        # (handles user_input/bot_response → role/content)
-        cur.execute("""
-        DO $$
-        BEGIN
-            IF EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'memory' AND column_name = 'user_input'
-            ) THEN
-                BEGIN
-                    ALTER TABLE memory ADD COLUMN IF NOT EXISTS role TEXT;
-                    ALTER TABLE memory ADD COLUMN IF NOT EXISTS content TEXT;
-                    UPDATE memory SET role='user', content=user_input WHERE role IS NULL AND user_input IS NOT NULL;
-                    UPDATE memory SET role='evosgpt', content=bot_response WHERE role IS NULL AND bot_response IS NOT NULL;
-                    ALTER TABLE memory DROP COLUMN IF EXISTS user_input;
-                    ALTER TABLE memory DROP COLUMN IF EXISTS bot_response;
-                    ALTER TABLE memory DROP COLUMN IF EXISTS system_msg;
-                EXCEPTION WHEN OTHERS THEN
-                    RAISE NOTICE 'Memory migration skipped (columns already updated)';
-                END;
-            END IF;
-        END$$;
-        """)
-
-        # ---------- LONG MEMORY ----------
-        cur.execute("""
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS long_memory (
             id SERIAL PRIMARY KEY,
             user_id INTEGER UNIQUE REFERENCES users(id),
             summary TEXT,
             last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
-
-        # ---------- GLOBAL MEMORY ----------
-        cur.execute("""
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS global_memory (
             id SERIAL PRIMARY KEY,
             content TEXT,
             importance REAL DEFAULT 0.5,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
-
-        # ---------- PURCHASES ----------
-        cur.execute("""
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS purchases (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id),
@@ -401,28 +373,22 @@ def init_db():
             reference TEXT UNIQUE,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
-
-        # ---------- ANALYTICS ----------
-        cur.execute("""
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS analytics (
             id SERIAL PRIMARY KEY,
             tier TEXT,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
-
-        # ---------- COUPONS ----------
-        cur.execute("""
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS coupons (
             code TEXT PRIMARY KEY,
             tier TEXT,
             used INTEGER DEFAULT 0
         )
-        """)
-
-        # ---------- ACTIVITY LOG ----------
-        cur.execute("""
+    """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS activity_log (
             id SERIAL PRIMARY KEY,
             user_id INTEGER REFERENCES users(id),
@@ -430,24 +396,31 @@ def init_db():
             details TEXT,
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
-
-        # ---------- SEED COUPONS ----------
-        cur.execute("SELECT COUNT(*) FROM coupons")
-        if cur.fetchone()[0] == 0:
-            cur.executemany("INSERT INTO coupons (code, tier) VALUES (%s, %s)", [
-                ("FREECORE", "Core"),
-                ("KINGME", "King"),
-                ("BOOSTPRO", "Pro")
-            ])
-
-        conn.commit()
-        cur.close()
-        conn.close()
-        print("✅ Supabase/Postgres DB initialized successfully with EVOSGPT adaptive memory + migration support.")
+    """)
 
 
-# ---------- small helper for SQLite ALTERs ----------
+# ---------- VERIFY SUPABASE CONNECTION ----------
+def _verify_supabase_connection():
+    if DB_MODE not in ("supabase", "postgres"):
+        return
+    try:
+        resp = requests.get(
+            f"{SUPABASE_URL}/rest/v1/memory?select=id&limit=1",
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}"
+            },
+            timeout=5
+        )
+        if resp.status_code == 200:
+            print("🌐 Supabase connection verified successfully.")
+        else:
+            print(f"⚠️ Supabase REST returned {resp.status_code}: {resp.text[:150]}")
+    except Exception as e:
+        print(f"⚠️ Supabase connection failed: {e}")
+
+
+# ---------- SAFE ALTER (LOCAL EVOLUTION) ----------
 def safe_alters_sqlite(cursor):
     alters = [
         "ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'Basic'",
@@ -462,11 +435,11 @@ def safe_alters_sqlite(cursor):
             cursor.execute(stmt)
         except sqlite3.OperationalError:
             pass
-
     try:
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
     except sqlite3.OperationalError:
         pass
+
 
     try:
         cursor.execute("UPDATE users SET tier = 'Basic' WHERE tier IS NULL")
@@ -1155,15 +1128,34 @@ def index():
         referrals_used=referrals_used
     )
 
-# ---------- CHAT ROUTE (EVOSGPT WebCore — Supabase Safe Write Edition) ----------
+# ---------- CHAT ROUTE (EVOSGPT WebCore — Supabase Integrated Build) ----------
 import re, sqlite3, os, requests, json
 from flask import request, session, jsonify
 
+# --- Environment ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 DB_MODE = os.getenv("DB_MODE", "sqlite").lower()
 
+
+# ---------- Utilities ----------
+def log_suspicious(tag, details):
+    """Logs security or DB issues to Railway console for debugging."""
+    print(f"[{tag}] {details}")
+
+
+def get_local_db():
+    """Gracefully returns a local SQLite connection if available."""
+    try:
+        os.makedirs("database", exist_ok=True)
+        return sqlite3.connect("database/memory.db")
+    except Exception as e:
+        log_suspicious("LocalDBError", str(e))
+        return None
+
+
 def auto_paragraph(text: str) -> str:
+    """Formats replies into readable paragraphs with Markdown preservation."""
     if not text:
         return ""
     text = text.replace("\r\n", "\n")
@@ -1184,6 +1176,7 @@ def auto_paragraph(text: str) -> str:
     return '\n\n'.join(result).strip()
 
 
+# ---------- Main Chat Route ----------
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
@@ -1197,17 +1190,19 @@ def chat():
     if "user_id" not in session:
         if not guest_id:
             try:
-                conn = sqlite3.connect("database/memory.db")
-                c = conn.cursor()
-                token = os.urandom(16).hex()
-                c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
-                conn.commit()
-                guest_id = c.lastrowid
-                session["guest_id"] = guest_id
-                session["guest_count"] = 0
-                c.close(); conn.close()
+                conn = get_local_db()
+                if conn:
+                    c = conn.cursor()
+                    token = os.urandom(16).hex()
+                    c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
+                    conn.commit()
+                    guest_id = c.lastrowid
+                    session["guest_id"] = guest_id
+                    session["guest_count"] = 0
+                    c.close(); conn.close()
             except Exception as e:
                 log_suspicious("GuestCreateFail", str(e))
+
         guest_count = session.get("guest_count", 0)
         if guest_count >= 5:
             return jsonify({"reply": "🚪 Guest mode limit reached. Redirecting to registration…", "redirect": "/register"})
@@ -1226,55 +1221,58 @@ def chat():
             reply = "[SYSTEM] Founder tier unlocked. Welcome, hidden user."
             session.update({"founder_seq": 0, "tier": "Founder"})
             try:
-                with sqlite3.connect("database/memory.db") as conn:
-                    conn.execute("UPDATE users SET tier = ? WHERE id = ?", ("Founder", session["user_id"]))
-                    conn.commit()
+                with get_local_db() as conn:
+                    if conn:
+                        conn.execute("UPDATE users SET tier = ? WHERE id = ?", ("Founder", session["user_id"]))
+                        conn.commit()
             except Exception as e:
                 log_suspicious("FounderUnlockFail", str(e))
         elif tier == "Founder" and ui == "logout evosgpt":
             reply = "[SYSTEM] Founder mode deactivated. Returning to Basic tier."
             session["tier"] = "Basic"
             try:
-                with sqlite3.connect("database/memory.db") as conn:
-                    conn.execute("UPDATE users SET tier = ? WHERE id = ?", ("Basic", session["user_id"]))
-                    conn.commit()
+                with get_local_db() as conn:
+                    if conn:
+                        conn.execute("UPDATE users SET tier = ? WHERE id = ?", ("Basic", session["user_id"]))
+                        conn.commit()
             except Exception as e:
                 log_suspicious("FounderLogoutFail", str(e))
         elif seq > 0:
             session["founder_seq"] = 0
 
-    # --- Memory Recall ---
+    # --- 🧠 Memory Recall (local context only for continuity) ---
     memory_context = ""
     try:
-        conn = sqlite3.connect("database/memory.db")
-        c = conn.cursor()
-        if "user_id" in session:
-            uid = session["user_id"]
-            limit = 5 if tier == "Basic" else 10 if tier == "Pro" else 15
-            c.execute("SELECT role, content FROM memory WHERE user_id = ? ORDER BY id DESC LIMIT ?", (uid, limit))
-        else:
-            c.execute("SELECT role, content FROM memory WHERE guest_id = ? ORDER BY id DESC LIMIT 5", (guest_id,))
-        rows = c.fetchall()
+        conn = get_local_db()
+        if conn:
+            c = conn.cursor()
+            if "user_id" in session:
+                uid = session["user_id"]
+                limit = 5 if tier == "Basic" else 10 if tier == "Pro" else 15
+                c.execute("SELECT role, content FROM memory WHERE user_id = ? ORDER BY id DESC LIMIT ?", (uid, limit))
+            else:
+                c.execute("SELECT role, content FROM memory WHERE guest_id = ? ORDER BY id DESC LIMIT 5", (guest_id,))
+            rows = c.fetchall()
 
-        # global + long-term recall
-        c.execute("SELECT content FROM global_memory ORDER BY importance DESC LIMIT 3")
-        global_rows = [r[0] for r in c.fetchall()]
-        long_summary = ""
-        if "user_id" in session:
-            c.execute("SELECT summary FROM long_memory WHERE user_id = ?", (session["user_id"],))
-            row = c.fetchone()
-            if row and row[0]:
-                long_summary = f"\n[Long-Term Personality Memory]\n{row[0]}"
-        c.close(); conn.close()
+            # Global + Long-term memory
+            c.execute("SELECT content FROM global_memory ORDER BY importance DESC LIMIT 3")
+            global_rows = [r[0] for r in c.fetchall()]
+            long_summary = ""
+            if "user_id" in session:
+                c.execute("SELECT summary FROM long_memory WHERE user_id = ?", (session["user_id"],))
+                row = c.fetchone()
+                if row and row[0]:
+                    long_summary = f"\n[Long-Term Personality Memory]\n{row[0]}"
+            c.close(); conn.close()
 
-        history_lines = [f"{'User' if r == 'user' else 'EVOSGPT'}: {t}" for r, t in reversed(rows)]
-        if long_summary: history_lines.append(long_summary)
-        if global_rows: history_lines.append("\n[Global Memory]\n" + "\n".join(global_rows))
-        memory_context = "\n".join(history_lines)
+            history_lines = [f"{'User' if r == 'user' else 'EVOSGPT'}: {t}" for r, t in reversed(rows)]
+            if long_summary: history_lines.append(long_summary)
+            if global_rows: history_lines.append("\n[Global Memory]\n" + "\n".join(global_rows))
+            memory_context = "\n".join(history_lines)
     except Exception as e:
         log_suspicious("MemoryReadFail", str(e))
 
-    # --- AI Generation ---
+    # --- 🧠 AI Generation ---
     if reply is None:
         try:
             prompt = f"""
@@ -1293,55 +1291,56 @@ Use prior memory and context below to maintain continuity.
             log_suspicious("AIProcessingFail", str(e))
             reply = "⚠️ System error while processing your message."
 
-    # --- Save Messages (SQL → REST fallback) ---
+    # --- 💾 Save Messages (SQLite → Supabase REST fallback) ---
+    uid = session.get("user_id")
     try:
-        uid = session.get("user_id")
-        conn = sqlite3.connect("database/memory.db")
-        c = conn.cursor()
-
-        if uid:
-            c.executemany("INSERT INTO memory (user_id, role, content, importance) VALUES (?, ?, ?, ?)", [
-                (uid, "user", user_msg, 0.5),
-                (uid, "evosgpt", reply, 0.5)
-            ])
-            conn.commit()
-            enforce_memory_limit(uid, tier)
-        elif guest_id:
-            c.executemany("INSERT INTO memory (guest_id, role, content) VALUES (?, ?, ?)", [
-                (guest_id, "user", user_msg),
-                (guest_id, "evosgpt", reply)
-            ])
-            conn.commit()
-        c.close(); conn.close()
-
+        conn = get_local_db()
+        if conn:
+            c = conn.cursor()
+            if uid:
+                c.executemany("INSERT INTO memory (user_id, role, content, importance) VALUES (?, ?, ?, ?)", [
+                    (uid, "user", user_msg, 0.5),
+                    (uid, "evosgpt", reply, 0.5)
+                ])
+                conn.commit()
+                enforce_memory_limit(uid, tier)
+            elif guest_id:
+                c.executemany("INSERT INTO memory (guest_id, role, content) VALUES (?, ?, ?)", [
+                    (guest_id, "user", user_msg),
+                    (guest_id, "evosgpt", reply)
+                ])
+                conn.commit()
+            c.close(); conn.close()
     except Exception as sql_err:
         log_suspicious("ChatInsertFail", str(sql_err))
 
-        # ✅ Supabase REST fallback
-        if DB_MODE in ("supabase", "postgres") and SUPABASE_URL and SUPABASE_KEY:
-            try:
-                headers = {
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                    "Content-Type": "application/json",
-                }
-                payloads = []
-                if "user_id" in session:
-                    payloads = [
-                        {"user_id": uid, "role": "user", "content": user_msg, "importance": 0.5},
-                        {"user_id": uid, "role": "evosgpt", "content": reply, "importance": 0.5},
-                    ]
-                elif guest_id:
-                    payloads = [
-                        {"guest_id": guest_id, "role": "user", "content": user_msg},
-                        {"guest_id": guest_id, "role": "evosgpt", "content": reply},
-                    ]
-                for p in payloads:
-                    requests.post(f"{SUPABASE_URL}/rest/v1/memory", headers=headers, data=json.dumps(p))
-            except Exception as rest_err:
-                log_suspicious("SupabaseRESTFail", str(rest_err))
+    # ✅ Always push to Supabase REST (for persistence)
+    if DB_MODE in ("supabase", "postgres") and SUPABASE_URL and SUPABASE_KEY:
+        try:
+            headers = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+            }
+            payloads = []
+            if uid:
+                payloads = [
+                    {"user_id": uid, "role": "user", "content": user_msg, "importance": 0.5},
+                    {"user_id": uid, "role": "evosgpt", "content": reply, "importance": 0.5},
+                ]
+            elif guest_id:
+                payloads = [
+                    {"guest_id": guest_id, "role": "user", "content": user_msg},
+                    {"guest_id": guest_id, "role": "evosgpt", "content": reply},
+                ]
+            for p in payloads:
+                res = requests.post(f"{SUPABASE_URL}/rest/v1/memory", headers=headers, data=json.dumps(p))
+                if res.status_code >= 300:
+                    log_suspicious("SupabaseRESTFail", f"Code {res.status_code}: {res.text}")
+        except Exception as rest_err:
+            log_suspicious("SupabaseRESTFail", str(rest_err))
 
-    # --- Auto Summarization ---
+    # --- 🧩 Auto Summarization ---
     if "user_id" in session:
         try:
             summarize_user_memory(session["user_id"])
@@ -1349,9 +1348,6 @@ Use prior memory and context below to maintain continuity.
             log_suspicious("SummarizeFail", str(e))
 
     return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
-
-
-
 
 
 @app.route("/chat/result", methods=["GET"])
@@ -2531,6 +2527,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
