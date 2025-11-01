@@ -1294,25 +1294,28 @@ def chat():
         log_suspicious("ChatInsertFail", str(e))
 
     # --- Mirror to Supabase (for extra safety) ---
-    if DB_MODE in ("supabase", "postgres") and SUPABASE_URL and SUPABASE_KEY:
-        try:
-            headers = {
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "user_id": session.get("user_id"),
-                "guest_id": guest_id,
-                "user_input": user_msg,
-                "bot_response": reply,
-                "system_msg": 0,
-            }
-            res = requests.post(f"{SUPABASE_URL}/rest/v1/memory", headers=headers, data=json.dumps(payload))
-            if res.status_code >= 300:
-                log_suspicious("SupabaseMirrorFail", f"{res.status_code}: {res.text}")
-        except Exception as e:
-            log_suspicious("SupabaseMirrorFail", str(e))
+    # --- Mirror to Supabase (safe JSON) ---
+if DB_MODE in ("supabase", "postgres") and SUPABASE_URL and SUPABASE_KEY:
+    try:
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal"
+        }
+        payload = {
+            "user_id": session.get("user_id"),
+            "guest_id": guest_id,
+            "user_input": user_msg,
+            "bot_response": reply,
+            "system_msg": 0
+        }
+        res = requests.post(f"{SUPABASE_URL}/rest/v1/memory", headers=headers, json=payload)
+        if not res.ok:
+            log_suspicious("SupabaseMirrorFail", f"{res.status_code}: {res.text}")
+    except Exception as e:
+        log_suspicious("SupabaseMirrorFail", str(e))
+
 
     # --- Auto Summarize into long_memory ---
     try:
@@ -2520,6 +2523,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
