@@ -445,119 +445,114 @@ def safe_alters_sqlite(cursor):
         pass
 
 
-import sqlite3
-import random
-import datetime
-import os
-
-# ---------- SAFE MEMORY LIMIT CONTROL ----------
 def enforce_memory_limit(user_id, tier):
-    """
-    Trims user memory gradually by tier.
-    v0: safe soft-limit, ensures continuity while avoiding bloat.
-    """
-    limits = {
-        "Basic": 50,
-        "Core": 200,
-        "Pro": 800,
-        "King": 1500,
-        "Founder": 5000
-    }
-
-    limit = limits.get(tier, 100)
+    """Trim per-user memory entries based on tier limits (safe, idempotent)."""
     conn = None
-
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM memory WHERE user_id=?", (user_id,))
-        total = c.fetchone()[0]
+        c.execute("SELECT COUNT(*) FROM memory WHERE user_id = ?", (user_id,))
+        row = c.fetchone()
+        total = row[0] if row else 0
 
-        # Trim only if memory exceeds 2× limit
-        if total > limit * 2:
+        if tier == "Basic":
+            limit = 30
+        elif tier == "Core":
+            limit = 100
+        else:
+            return
+
+        if total > limit:
             to_delete = total - limit
             c.execute("""
                 DELETE FROM memory 
                 WHERE id IN (
-                    SELECT id FROM memory WHERE user_id=? ORDER BY id ASC LIMIT ?
+                    SELECT id FROM memory WHERE user_id = ? ORDER BY id ASC LIMIT ?
                 )
             """, (user_id, to_delete))
             conn.commit()
-
     except Exception as e:
+        # don't raise; just log suspicious for debug
         try:
-            log_suspicious("EnforceMemoryLimitFail", str(e))
+            log_suspicious("EnforceMemoryError", str(e))
         except Exception:
             pass
     finally:
         if conn:
             conn.close()
 
+import random
+import datetime
 
-
-# ---------- LONG MEMORY SUMMARIZATION ----------
 def summarize_user_memory(user_id, tier="Basic", force=False):
     """
-    Evolves user context by summarizing memory based on tier frequency.
-    Summaries store emotional tone, goals, and recurring themes.
+    Periodically condense recent short-term chat history into a long-term
+    'summary' stored in long_memory.
+    Each tier determines how frequently summarization occurs.
+    Founder evolves nearly every chat.
     """
-    conn = None
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
-        c.execute("SELECT COUNT(*) FROM memory WHERE user_id=?", (user_id,))
-        total = c.fetchone()[0]
-        conn.close()
 
-        # Tier-based evolution rate
+        # --- Count user messages ---
+        c.execute("SELECT COUNT(*) FROM memory WHERE user_id = ?", (user_id,))
+        total = c.fetchone()[0]
+
+        # --- Tier-based frequency mapping ---
         tier_thresholds = {
             "Basic": 25,
             "Core": 15,
-            "Pro": 8,
-            "King": 5,
-            "Founder": random.choice([1, 2])  # unpredictable reflection
+            "Pro": 7,
+            "King": 3,
+            "Founder": random.choice([1, 2])  # evolves fast and unpredictably
         }
+        trigger_threshold = tier_thresholds.get(tier, 10)
 
-        trigger = tier_thresholds.get(tier, 15)
-        if not force and total % trigger != 0:
-            return  # Skip until threshold reached
-
-        # Fetch latest user interaction samples
-        conn = sqlite3.connect("database/memory.db")
-        c = conn.cursor()
-        c.execute("""
-            SELECT user_input, bot_response 
-            FROM memory WHERE user_id=? 
-            ORDER BY id DESC LIMIT 12
-        """, (user_id,))
-        recent = c.fetchall()
-        conn.close()
-
-        if not recent:
+        # Skip unless threshold reached or forced
+        if total % trigger_threshold != 0 and not force:
+            conn.close()
             return
 
-        convo = "\n".join([f"User: {u}\nAI: {b}" for u, b in reversed(recent)])
+        # --- Fetch recent conversation ---
+        c.execute("""
+            SELECT role, content FROM memory
+            WHERE user_id = ?
+            ORDER BY id DESC LIMIT 10
+        """, (user_id,))
+        rows = c.fetchall()
+        conn.close()
 
+        if not rows:
+            return
+
+        # --- Combine into readable dialogue ---
+        conversation = "\n".join([f"{r[0].capitalize()}: {r[1]}" for r in reversed(rows)])
+
+        # --- Summarization prompt ---
         prompt = f"""
-You are EVOSGPT — a reflective intelligence evolving from conversation.
-Summarize the following interaction in one concise paragraph.
-Capture the user’s **intentions, emotional tone, personality, and ongoing goals**.
+You are EVOSGPT, evolving by reflection.
+Below is a recent conversation between you and a user.
+Summarize it in one factual, calm paragraph that captures the user's
+traits, goals, tone, and evolving personality.
 
 Conversation:
-{convo}
+{conversation}
 """
+
         summary = route_ai_call("Core", prompt).strip()
 
-        # Merge with existing summary (for continuity)
+        # --- Store or merge summary ---
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
-        c.execute("SELECT summary FROM long_memory WHERE user_id=?", (user_id,))
+        c.execute("SELECT summary FROM long_memory WHERE user_id = ?", (user_id,))
         existing = c.fetchone()
 
-        if existing and existing[0]:
-            merge_prompt = f"""
-Combine these two user summaries into one unified understanding.
-Avoid repetition. Maintain factual tone.
+        if existing:
+            merged_prompt = f"""
+You have two personality summaries for the same user.
+Merge them into one consistent, concise and neutral description
+without repeating or exaggerating traits.
 
 Old Summary:
 {existing[0]}
@@ -565,34 +560,27 @@ Old Summary:
 New Summary:
 {summary}
 """
-            merged = route_ai_call("Core", merge_prompt).strip()
+            merged = route_ai_call("Core", merged_prompt).strip()
             c.execute("""
-                UPDATE long_memory 
-                SET summary=?, last_updated=CURRENT_TIMESTAMP 
-                WHERE user_id=?
-            """, (merged, user_id))
+                UPDATE long_memory
+                SET summary = ?, last_updated = ?
+                WHERE user_id = ?
+            """, (merged, datetime.datetime.now(), user_id))
         else:
             c.execute("""
                 INSERT INTO long_memory (user_id, summary, last_updated)
-                VALUES (?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(user_id) DO UPDATE 
-                SET summary=excluded.summary, last_updated=CURRENT_TIMESTAMP;
-            """, (user_id, summary))
+                VALUES (?, ?, ?)
+            """, (user_id, summary, datetime.datetime.now()))
 
         conn.commit()
         conn.close()
-
-        print(f"🧠 Long memory evolved for user {user_id} ({tier})")
+        print(f"🧠 Summarized memory updated for user {user_id} (Tier: {tier})")
 
     except Exception as e:
         try:
-            log_suspicious("SummarizeUserMemoryFail", str(e))
+            log_suspicious("SummarizeMemoryError", str(e))
         except Exception:
             pass
-        if conn:
-            conn.close()
-
-
 
 # ---------- JOB STORE ----------
 import threading, random, time, sqlite3, requests, json, os
@@ -1135,52 +1123,55 @@ def index():
         referrals_used=referrals_used
     )
 
-# ---------- CHAT ROUTE (EV-Main + Long & Global Memory + Supabase Sync) ----------
-import os, re, sqlite3, json, requests
+# ---------- CHAT ROUTE + FORMATTERS (drop into your app.py) ----------
+import re
+import sqlite3
+import os
 from flask import request, session, jsonify
 
-# === Supabase / DB Compatibility Patch ===
-try:
-    import psycopg2
-except ImportError:
-    psycopg2 = None
-
-def supabase_connect(_=None):
-    if not psycopg2:
-        raise RuntimeError("psycopg2 required for Supabase mode")
-    conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
-    return conn
-
-# 🔧 Replace sqlite3.connect dynamically if DB_MODE indicates Supabase
-if os.getenv("DB_MODE", "sqlite").lower() in ("supabase", "postgres"):
-    sqlite3.connect = supabase_connect
-
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-DB_MODE = os.getenv("DB_MODE", "sqlite").lower()
-
-# === Helper: auto_paragraph ===
 def auto_paragraph(text: str) -> str:
+    """
+    Force replies into readable Markdown paragraphs while preserving:
+    - fenced code blocks (```...```)
+    - existing list-lines that start with -, *, • or digit.
+    - headers (# ...) and quotes (> ...)
+    Splits into sentences and creates clean paragraphs.
+    """
     if not text:
         return ""
+
     text = text.replace("\r\n", "\n")
+
+    # Split out fenced code blocks
     parts = re.split(r'(```[\s\S]*?```)', text, flags=re.MULTILINE)
     out_parts = []
+
     for idx, part in enumerate(parts):
-        if idx % 2 == 1:
+        if idx % 2 == 1:  # code block
             out_parts.append(part.strip())
             continue
-        segs = [s.strip() for s in re.split(r'\n\s*\n', part) if s.strip()]
-        for seg in segs:
-            if re.search(r'^\s*([-*•]|\d+\.)\s+', seg) or re.match(r'^\s*(#+\s|> )', seg):
+
+        # Split into blocks by blank lines
+        segments = [seg.strip() for seg in re.split(r'\n\s*\n', part) if seg.strip()]
+        for seg in segments:
+            # Preserve lists, headers, quotes as-is
+            if re.search(r'^\s*([-*•]|\d+\.)\s+', seg, flags=re.MULTILINE) \
+               or re.match(r'^\s*(#+\s|> )', seg):
                 out_parts.append(seg)
                 continue
-            for s in re.split(r'(?<=[.!?])\s+', seg):
-                if s.strip():
-                    out_parts.append(s.strip())
-    return "\n\n".join(out_parts).strip()
 
+            # Split into sentences
+            sentences = re.split(r'(?<=[.!?])\s+', seg)
+            for s in sentences:
+                s = s.strip()
+                if not s:
+                    continue
+                s = s.replace('\n', ' ')
+                out_parts.append(s)
 
+    # Join paragraphs with blank lines
+    result = '\n\n'.join([p for p in out_parts if p]).strip()
+    return result
 
 
 # ---------- CHAT ROUTE (EV-Main + Long & Global Memory) ----------
@@ -2502,6 +2493,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
