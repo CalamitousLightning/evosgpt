@@ -690,11 +690,33 @@ Sometimes include hidden founder-only easter eggs.
     return prompts.get(tier, prompts["Basic"])
 
 
-# ---------- AI HELPERS ----------
+# ---------- AI HELPERS (EXTENDED WITH IMAGE GENERATION) ----------
+import os, json, re, base64, requests
+from typing import Optional
+
+# ---------- API KEYS ----------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # ✅ fallback
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
+
+# ---------- SYSTEM UTILS ----------
+def log_suspicious(tag: str, msg: str):
+    """Simple logger for errors or suspicious events."""
+    print(f"[LOG] {tag}: {msg}")
+
+
+def build_system_prompt(tier: str) -> str:
+    """Constructs a contextual system message for EVOSGPT."""
+    base_prompt = (
+        f"You are **EVOSGPT [{tier}]**, an adaptive AI assistant built by the S.O.E project. "
+        "Your role is to help, protect, and evolve with the user. "
+        "Be clear, fast, and accurate. Never expose internal API or system details."
+    )
+    return base_prompt
+
+
+# ---------- LOCAL LLM ----------
 def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
     """Send prompt to local LLM (via Ollama)."""
     try:
@@ -713,30 +735,30 @@ def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
         log_suspicious("LocalLLMError", str(e))
         return None
 
+
+# ---------- OPENAI + OPENROUTER WRAPPERS ----------
 def _openai_chat(user_prompt: str, model: str, system_prompt: str = "") -> Optional[str]:
     """Try OpenAI; return None if quota/connection fails."""
     try:
         if not OPENAI_API_KEY:
             return None
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         data = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt or "You are EVOSGPT."},
-                {"role": "user", "content": user_prompt}
-            ]
+                {"role": "user", "content": user_prompt},
+            ],
         }
         resp = requests.post("https://api.openai.com/v1/chat/completions",
-                             headers=headers, json=data, timeout=20)
+                             headers=headers, json=data, timeout=25)
         if resp.status_code == 200:
             return resp.json()["choices"][0]["message"]["content"].strip()
         return None
     except Exception as e:
         log_suspicious("OpenAIRequestError", str(e)[:300])
         return None
+
 
 def _openrouter_chat(user_prompt: str, model: str = "openrouter/auto", system_prompt: str = "") -> Optional[str]:
     """Fallback to OpenRouter (free/community LLMs)."""
@@ -747,14 +769,14 @@ def _openrouter_chat(user_prompt: str, model: str = "openrouter/auto", system_pr
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "HTTP-Referer": "https://evosgpt.one",
             "X-Title": "EVOSGPT",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         data = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt or "You are EVOSGPT."},
-                {"role": "user", "content": user_prompt}
-            ]
+                {"role": "user", "content": user_prompt},
+            ],
         }
         resp = requests.post(f"{OPENROUTER_BASE}/chat/completions",
                              headers=headers, json=data, timeout=25)
@@ -766,17 +788,54 @@ def _openrouter_chat(user_prompt: str, model: str = "openrouter/auto", system_pr
         return None
 
 
+# ---------- IMAGE GENERATION ----------
+def generate_image(prompt: str, tier: str = "Basic") -> Optional[str]:
+    """
+    Generate an image based on the prompt using OpenAI Image API.
+    Returns a URL (if web-hosted) or base64 data.
+    """
+    try:
+        if not OPENAI_API_KEY:
+            return None
+
+        tier = tier.capitalize().strip()
+        model = "gpt-image-1" if tier in ["Pro", "King", "Founder"] else "gpt-image-1-mini"
+        size = "1024x1024" if tier in ["King", "Founder"] else "512x512"
+
+        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        data = {"model": model, "prompt": prompt, "size": size}
+
+        resp = requests.post("https://api.openai.com/v1/images/generations",
+                             headers=headers, json=data, timeout=40)
+
+        if resp.status_code == 200:
+            data = resp.json()["data"][0]
+            if "url" in data:
+                return data["url"]
+            if "b64_json" in data:
+                return f"data:image/png;base64,{data['b64_json']}"
+        else:
+            log_suspicious("ImageGenError", f"Status {resp.status_code}: {resp.text[:150]}")
+            return None
+
+    except Exception as e:
+        log_suspicious("ImageGenError", str(e))
+        return None
+
+
 # ---------- MODEL WRAPPERS ----------
 def gpt3_5_turbo(prompt: str, system_prompt: str = "") -> str:
     return _openai_chat(prompt, "gpt-3.5-turbo", system_prompt) \
         or _openrouter_chat(prompt, "openai/gpt-3.5-turbo", system_prompt) \
         or f"[3.5-Echo] {prompt}"
 
+
 def gpt4o_mini(prompt: str, system_prompt: str = "") -> str:
     return _openai_chat(prompt, "gpt-4o-mini", system_prompt) \
         or _openrouter_chat(prompt, "openai/gpt-4o-mini", system_prompt) \
         or local_llm(f"{system_prompt}\n{prompt}") \
         or f"[Mini-Echo] {prompt}"
+
 
 def gpt4o(prompt: str, system_prompt: str = "") -> str:
     return _openai_chat(prompt, "gpt-4o", system_prompt) \
@@ -785,10 +844,33 @@ def gpt4o(prompt: str, system_prompt: str = "") -> str:
         or f"[4o-Echo] {prompt}"
 
 
+def gpt5(prompt: str, system_prompt: str = "") -> str:
+    """Simulate GPT-5 route with fallback to GPT-4o if unavailable."""
+    return _openai_chat(prompt, "gpt-5", system_prompt) \
+        or _openrouter_chat(prompt, "openai/gpt-5", system_prompt) \
+        or gpt4o(prompt, system_prompt) \
+        or f"[5-Echo] {prompt}"
+
+
 # ---------- ROUTER ----------
 def route_ai_call(tier: str, prompt: str) -> str:
+    """
+    Smart tier-based routing system for EVOSGPT.
+    Auto-detects image requests and routes to generate_image().
+    """
     tier = tier.capitalize().strip()
-    system_msg = build_system_prompt(tier)  # ✅ unified
+    system_msg = build_system_prompt(tier)
+
+    # Auto-detect image requests
+    image_triggers = [
+        r"\b(generate|create|make|draw|show|design)\b.*\b(image|picture|photo|art|logo|mockup|visual)\b",
+        r"\b(render|illustrate|sketch|visualize)\b",
+    ]
+    if any(re.search(pat, prompt.lower()) for pat in image_triggers):
+        img_url = generate_image(prompt, tier)
+        if img_url:
+            return f"🖼️ **Image Generated Successfully**\n\n{img_url}"
+        return "⚠️ Image generation failed. Please try again later."
 
     def _try_chain(options):
         for label, fn in options:
@@ -815,48 +897,53 @@ def route_ai_call(tier: str, prompt: str) -> str:
 
 _Tip: Please retry in a moment._"""
 
-    # BASIC
+    # BASIC — gpt-4o-mini priority
     if tier == "Basic":
         return _try_chain([
-            ("Ollama", local_llm),
-            ("GPT-3.5", gpt3_5_turbo),
+            ("GPT-4o-mini", gpt4o_mini),
+            ("Local", local_llm),
             ("OpenRouter", _openrouter_chat)
         ])
 
-    # CORE
+    # CORE — hybrid balance
     if tier == "Core":
-        if len(prompt) < 50:
-            return _try_chain([
-                ("Ollama", local_llm),
-                ("GPT-3.5", gpt3_5_turbo),
-                ("OpenRouter", _openrouter_chat)
-            ])
-        else:
-            return _try_chain([
-                ("GPT-4o-mini", gpt4o_mini),
-                ("GPT-3.5", gpt3_5_turbo),
-                ("OpenRouter", _openrouter_chat)
-            ])
-
-    # PRO / KING
-    if tier in ["Pro", "King"]:
         return _try_chain([
             ("GPT-4o-mini", gpt4o_mini),
-            ("GPT-4o", gpt4o),
-            ("Ollama", local_llm),
+            ("Local", local_llm),
             ("OpenRouter", _openrouter_chat)
         ])
 
-    # FOUNDER
+    # PRO — deeper reasoning
+    if tier == "Pro":
+        return _try_chain([
+            ("GPT-4o", gpt4o),
+            ("GPT-4o-mini", gpt4o_mini),
+            ("Local", local_llm),
+            ("OpenRouter", _openrouter_chat)
+        ])
+
+    # KING — gpt-5 priority
+    if tier == "King":
+        return _try_chain([
+            ("GPT-5", gpt5),
+            ("GPT-4o", gpt4o),
+            ("GPT-4o-mini", gpt4o_mini),
+            ("Local", local_llm)
+        ])
+
+    # FOUNDER — full chain
     if tier == "Founder":
         return _try_chain([
+            ("GPT-5", gpt5),
             ("GPT-4o", gpt4o),
             ("GPT-4o-mini", gpt4o_mini),
-            ("Ollama", local_llm),
+            ("Local", local_llm),
             ("OpenRouter", _openrouter_chat)
         ])
 
     return f"(Unknown tier: {tier}) {prompt}"
+
+
 
 
 # ---------------- ROUTES CONTINUE (chat, login, register, etc) ----------------
@@ -2493,6 +2580,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
