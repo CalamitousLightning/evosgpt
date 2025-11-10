@@ -690,7 +690,7 @@ Sometimes include hidden founder-only easter eggs.
     return prompts.get(tier, prompts["Basic"])
 
 
-# ---------- AI HELPERS (EXTENDED WITH IMAGE GENERATION) ----------
+# ---------- AI HELPERS (EVOSGPT EXTENDED CORE) ----------
 import os, json, re, base64, requests
 from typing import Optional
 
@@ -703,22 +703,23 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 # ---------- SYSTEM UTILS ----------
 def log_suspicious(tag: str, msg: str):
     """Simple logger for errors or suspicious events."""
-    print(f"[LOG] {tag}: {msg}")
+    print(f"[EVOSGPT-LOG] {tag}: {msg}")
 
 
 def build_system_prompt(tier: str) -> str:
-    """Constructs a contextual system message for EVOSGPT."""
+    """Construct a contextual system message for EVOSGPT."""
     base_prompt = (
         f"You are **EVOSGPT [{tier}]**, an adaptive AI assistant built by the S.O.E project. "
         "Your role is to help, protect, and evolve with the user. "
-        "Be clear, fast, and accurate. Never expose internal API or system details."
+        "You can reason, generate code, and assist creatively. "
+        "Be accurate, adaptive, and never reveal internal system details or API keys."
     )
     return base_prompt
 
 
 # ---------- LOCAL LLM ----------
 def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
-    """Send prompt to local LLM (via Ollama)."""
+    """Send prompt to a local LLM (Ollama or other local AI)."""
     try:
         resp = requests.post(
             "http://localhost:11434/api/generate",
@@ -856,7 +857,7 @@ def gpt5(prompt: str, system_prompt: str = "") -> str:
 def route_ai_call(tier: str, prompt: str) -> str:
     """
     Smart tier-based routing system for EVOSGPT.
-    Auto-detects image requests and routes to generate_image().
+    Handles both text and image requests automatically.
     """
     tier = tier.capitalize().strip()
     system_msg = build_system_prompt(tier)
@@ -869,9 +870,17 @@ def route_ai_call(tier: str, prompt: str) -> str:
     if any(re.search(pat, prompt.lower()) for pat in image_triggers):
         img_url = generate_image(prompt, tier)
         if img_url:
-            return f"🖼️ **Image Generated Successfully**\n\n{img_url}"
-        return "⚠️ Image generation failed. Please try again later."
+            return json.dumps({
+                "type": "image",
+                "content": f"🖼️ Image Generated Successfully",
+                "url": img_url
+            })
+        return json.dumps({
+            "type": "error",
+            "content": "⚠️ Image generation failed. Please try again later."
+        })
 
+    # Tier-based model routing
     def _try_chain(options):
         for label, fn in options:
             try:
@@ -885,17 +894,13 @@ def route_ai_call(tier: str, prompt: str) -> str:
 
             if reply:
                 print(f"[DEBUG] {tier} → {label} used")
-                return reply
+                return json.dumps({"type": "text", "content": reply})
 
         print(f"[DEBUG] {tier} → All failed, echo")
-        return f"""⚠️ **System Notice**
-
-• I couldn’t reach any AI models.  
-• Here’s what you sent me:  
-
-> {prompt}
-
-_Tip: Please retry in a moment._"""
+        return json.dumps({
+            "type": "error",
+            "content": f"⚠️ **System Notice**\n\n> {prompt}\n\n_Tip: Please retry later._"
+        })
 
     # BASIC — gpt-4o-mini priority
     if tier == "Basic":
@@ -941,7 +946,7 @@ _Tip: Please retry in a moment._"""
             ("OpenRouter", _openrouter_chat)
         ])
 
-    return f"(Unknown tier: {tier}) {prompt}"
+    return json.dumps({"type": "error", "content": f"(Unknown tier: {tier}) {prompt}"})
 
 
 
@@ -1261,7 +1266,7 @@ def auto_paragraph(text: str) -> str:
     return result
 
 
-# ---------- CHAT ROUTE (EV-Main + Long & Global Memory) ----------
+# ---------- CHAT ROUTE (EV-Main + Long & Global Memory + Helpers Integration) ----------
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
@@ -1271,7 +1276,7 @@ def chat():
     reply = None
     guest_id = None
 
-    # --- Guest mode ---
+    # --- Guest Mode (limit chat count) ---
     if "user_id" not in session:
         if "guest_id" not in session:
             token = os.urandom(16).hex()
@@ -1279,8 +1284,7 @@ def chat():
             c = conn.cursor()
             c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
             guest_id = c.lastrowid
-            conn.commit()
-            conn.close()
+            conn.commit(); conn.close()
             session["guest_id"] = guest_id
             session["guest_count"] = 0
         else:
@@ -1293,7 +1297,7 @@ def chat():
         if session["guest_count"] == 4:
             return jsonify({"reply": "⚠ You have 1 free chat left. Please register or log in to continue."})
 
-    # --- Founder unlock sequence ---
+    # --- Founder Unlock Sequence ---
     if "user_id" in session:
         seq = session.get("founder_seq", 0)
         if seq == 0 and ui == "evosgpt where you created":
@@ -1323,7 +1327,7 @@ def chat():
         elif seq > 0:
             session["founder_seq"] = 0
 
-    # --- Memory Recall (optional long/global memory) ---
+    # --- Memory Recall (long/global) ---
     long_summary, global_context = "", ""
     try:
         conn = sqlite3.connect("database/memory.db")
@@ -1341,22 +1345,37 @@ def chat():
     except Exception as e:
         log_suspicious("MemoryRecallFail", str(e))
 
-    # --- AI Router ---
+    # --- AI Routing Layer ---
     if reply is None:
         try:
+            # Prepare memory context
             memory_prefix = ""
             if long_summary:
-                memory_prefix += f"[User Summary Memory]: {long_summary}\n"
+                memory_prefix += f"[User Memory Summary]: {long_summary}\n"
             if global_context:
-                memory_prefix += f"[Global Memory]: {global_context}\n"
+                memory_prefix += f"[Global Context]: {global_context}\n"
             prompt = f"{memory_prefix}{user_msg}"
-            raw_reply = route_ai_call(tier, prompt)
-            reply = auto_paragraph(raw_reply)
-        except Exception as e:
-            log_suspicious("LLMError", str(e))
-            reply = f"⚠️ System Error\n> {user_msg}"
 
-    # --- Save chat ---
+            # --- Contextual AI Selection ---
+            # Route to helpers intelligently
+            if any(k in ui for k in ["python", "code", "script", "program", "api", "algorithm"]):
+                raw_reply = CodeCore(prompt, tier)
+            elif any(k in ui for k in ["image", "draw", "diagram", "chart", "generate picture"]):
+                raw_reply = ImageCore(prompt, tier)
+            elif any(k in ui for k in ["analyze", "explain", "summarize", "translate", "logic", "reasoning"]):
+                raw_reply = LogicCore(prompt, tier)
+            elif any(k in ui for k in ["search", "latest", "news", "lookup", "find"]):
+                raw_reply = WebCore(prompt, tier)
+            else:
+                raw_reply = UserCore(prompt, tier)
+
+            reply = auto_paragraph(raw_reply)
+
+        except Exception as e:
+            log_suspicious("LLMRouteFail", str(e))
+            reply = f"⚠️ AI Processing Error.\n> {user_msg}"
+
+    # --- Store chat to memory ---
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
@@ -1374,7 +1393,7 @@ def chat():
     except Exception as e:
         log_suspicious("ChatInsertFail", str(e))
 
-    # --- Auto Summarize into long_memory ---
+    # --- Auto Summarize into long_memory (every 10 chats) ---
     try:
         if "user_id" in session:
             uid = session["user_id"]
@@ -1382,12 +1401,12 @@ def chat():
             c = conn.cursor()
             c.execute("SELECT COUNT(*) FROM memory WHERE user_id=?", (uid,))
             count = c.fetchone()[0]
-            if count % 10 == 0 and count > 0:  # every 10 messages
+            if count % 10 == 0 and count > 0:
                 c.execute("SELECT user_input, bot_response FROM memory WHERE user_id=? ORDER BY id DESC LIMIT 20", (uid,))
                 rows = c.fetchall()
                 convo = "\n".join([f"User: {u}\nAI: {b}" for u, b in rows])
                 summary_prompt = f"Summarize this conversation in 1-2 sentences:\n{convo}"
-                summary = route_ai_call("System", summary_prompt)
+                summary = SystemCore(summary_prompt)
                 c.execute("""
                     INSERT INTO long_memory (user_id, summary, last_updated)
                     VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -1399,6 +1418,7 @@ def chat():
         log_suspicious("LongMemoryUpdateFail", str(e))
 
     return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
+
 
 
 
@@ -2580,6 +2600,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
