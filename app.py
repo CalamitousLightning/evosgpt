@@ -1944,10 +1944,10 @@ def register():
             conn = sqlite3.connect("database/memory.db")
             c = conn.cursor()
 
-            # 🔹 Assign tier (first 100 = Pro, rest Basic)
+            # 🔹 Assign tier (first 50 = Pro, rest Basic)
             c.execute("SELECT COUNT(*) FROM users")
             total_users = c.fetchone()[0] or 0
-            tier = "Pro" if total_users < 100 else "Basic"
+            tier = "Pro" if total_users < 50 else "Basic"
 
             # 🔹 Generate referral code
             referral_code = generate_referral_code()
@@ -2580,6 +2580,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
