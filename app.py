@@ -1342,7 +1342,6 @@ def chat():
     if reply is None:
         try:
             raw_reply = route_ai_call(tier, user_msg)
-            # ✅ Trust system prompt formatting, just polish with auto_paragraph for safety
             reply = auto_paragraph(raw_reply)
         except Exception as e:
             log_suspicious("LLMError", str(e))
@@ -1366,6 +1365,17 @@ def chat():
             )
             conn.commit()
             enforce_memory_limit(uid, tier)
+
+            # ✅ NEW: Update user's chat and word count for EvosToken tracking
+            word_count = len(user_msg.split())
+            c.execute("""
+                UPDATE users
+                SET chat_count = chat_count + 1,
+                    word_count = word_count + ?
+                WHERE id = ?
+            """, (word_count, uid))
+            conn.commit()
+
         elif guest_id:
             c.execute(
                 "INSERT INTO memory (guest_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
@@ -2558,6 +2568,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
