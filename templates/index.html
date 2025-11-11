@@ -254,6 +254,8 @@
   </style>
 </head>
 
+</head>
+
 <body>
   <div id="sidebar">
     <a href="javascript:void(0)" onclick="toggleSidebar()">⬅ Back</a>
@@ -288,8 +290,8 @@
     <header>
       <span class="menu-btn" onclick="toggleSidebar()">☰</span>
       <h1>
-        <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" class="spin-logo" alt="EVOSGPT Logo">
-        {{ tier }} Mode
+        <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" alt="EVOSGPT Logo">
+        EVOSGPT {{ icon }} {{ tier }} Mode
       </h1>
       <div class="auth-links">
         {% if not logged_in %}
