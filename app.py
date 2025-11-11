@@ -1215,18 +1215,12 @@ def index():
         referrals_used=referrals_used
     )
 
-# ---------- CHAT ROUTE + FORMATTERS (EVOSGPT PROTECTED) ----------
+# ---------- CHAT ROUTE + FORMATTERS (drop into your app.py) ----------
 import re
 import sqlite3
 import os
-import json
-import uuid
-import requests
 from flask import request, session, jsonify
-from helpers import route_ai_call, log_suspicious  # ✅ import from your AI helpers
 
-
-# ---------- FORMATTER ----------
 def auto_paragraph(text: str) -> str:
     """
     Force replies into readable Markdown paragraphs while preserving:
@@ -1267,15 +1261,18 @@ def auto_paragraph(text: str) -> str:
                 s = s.replace('\n', ' ')
                 out_parts.append(s)
 
-    return '\n\n'.join([p for p in out_parts if p]).strip()
+    # Join paragraphs with blank lines
+    result = '\n\n'.join([p for p in out_parts if p]).strip()
+    return result
 
 
-# ---------- MAIN CHAT ROUTE ----------
+# ---------- CHAT ROUTE ----------
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
     user_msg = (data.get("message") or "").strip()
     ui = user_msg.lower()
+
     tier = session.get("tier", "Basic")
     reply = None
 
@@ -1324,7 +1321,7 @@ def chat():
             try:
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
-                c.execute("UPDATE users SET tier=? WHERE id=?", ("Founder", session["user_id"]))
+                c.execute("UPDATE users SET tier = ? WHERE id = ?", ("Founder", session["user_id"]))
                 conn.commit()
                 conn.close()
             except Exception as e:
@@ -1335,7 +1332,7 @@ def chat():
             try:
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
-                c.execute("UPDATE users SET tier=? WHERE id=?", ("Basic", session["user_id"]))
+                c.execute("UPDATE users SET tier = ? WHERE id = ?", ("Basic", session["user_id"]))
                 conn.commit()
                 conn.close()
             except Exception as e:
@@ -1348,32 +1345,16 @@ def chat():
     if reply is None:
         try:
             raw_reply = route_ai_call(tier, user_msg)
-
-            # ✅ Parse JSON-based responses from AI Helpers
-            try:
-                parsed = json.loads(raw_reply)
-                rtype = parsed.get("type", "text")
-                content = parsed.get("content", "")
-
-                if rtype == "text":
-                    reply = auto_paragraph(content)
-
-                elif rtype == "image":
-                    img_url = parsed.get("url", "")
-                    reply = f"{content}\n\n<img src='{img_url}' alt='Generated Image' class='evos-image' style='max-width:100%;border-radius:1rem;' />"
-
-                elif rtype == "error":
-                    reply = f"⚠️ {content}"
-
-                else:
-                    reply = auto_paragraph(content)
-
-            except Exception:
-                reply = auto_paragraph(raw_reply)
-
+            # ✅ Trust system prompt formatting, just polish with auto_paragraph for safety
+            reply = auto_paragraph(raw_reply)
         except Exception as e:
             log_suspicious("LLMError", str(e))
-            reply = f"⚠️ **System Error**\n\n> {user_msg}"
+            reply = f"""⚠️ **System Error**
+
+• I wasn’t able to process your request.  
+• Input received:  
+
+> {user_msg}"""
 
     # --- Save chat ---
     try:
@@ -1394,6 +1375,7 @@ def chat():
                 (guest_id, user_msg, reply)
             )
             conn.commit()
+
         conn.close()
     except Exception as e:
         log_suspicious("ChatInsertFail", str(e))
@@ -2581,6 +2563,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
