@@ -640,6 +640,9 @@ def process_chat_job(job_id, user_id, tier, user_msg):
         jobs[job_id] = {"status": "done", "reply": reply}
 
 
+import os, json, requests
+from typing import Optional
+
 # ---------- SYSTEM PROMPTS ----------
 def build_system_prompt(tier: str) -> str:
     """
@@ -690,7 +693,7 @@ Sometimes include hidden founder-only easter eggs.
     return prompts.get(tier, prompts["Basic"])
 
 
-# ---------- AI HELPERS (EVOSGPT EXTENDED CORE) ----------
+# ---------- AI HELPERS (EXTENDED WITH IMAGE GENERATION) ----------
 import os, json, re, base64, requests
 from typing import Optional
 
@@ -703,23 +706,22 @@ OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 # ---------- SYSTEM UTILS ----------
 def log_suspicious(tag: str, msg: str):
     """Simple logger for errors or suspicious events."""
-    print(f"[EVOSGPT-LOG] {tag}: {msg}")
+    print(f"[LOG] {tag}: {msg}")
 
 
 def build_system_prompt(tier: str) -> str:
-    """Construct a contextual system message for EVOSGPT."""
+    """Constructs a contextual system message for EVOSGPT."""
     base_prompt = (
         f"You are **EVOSGPT [{tier}]**, an adaptive AI assistant built by the S.O.E project. "
         "Your role is to help, protect, and evolve with the user. "
-        "You can reason, generate code, and assist creatively. "
-        "Be accurate, adaptive, and never reveal internal system details or API keys."
+        "Be clear, fast, and accurate. Never expose internal API or system details."
     )
     return base_prompt
 
 
 # ---------- LOCAL LLM ----------
 def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
-    """Send prompt to a local LLM (Ollama or other local AI)."""
+    """Send prompt to local LLM (via Ollama)."""
     try:
         resp = requests.post(
             "http://localhost:11434/api/generate",
@@ -857,7 +859,7 @@ def gpt5(prompt: str, system_prompt: str = "") -> str:
 def route_ai_call(tier: str, prompt: str) -> str:
     """
     Smart tier-based routing system for EVOSGPT.
-    Handles both text and image requests automatically.
+    Auto-detects image requests and routes to generate_image().
     """
     tier = tier.capitalize().strip()
     system_msg = build_system_prompt(tier)
@@ -870,17 +872,9 @@ def route_ai_call(tier: str, prompt: str) -> str:
     if any(re.search(pat, prompt.lower()) for pat in image_triggers):
         img_url = generate_image(prompt, tier)
         if img_url:
-            return json.dumps({
-                "type": "image",
-                "content": f"🖼️ Image Generated Successfully",
-                "url": img_url
-            })
-        return json.dumps({
-            "type": "error",
-            "content": "⚠️ Image generation failed. Please try again later."
-        })
+            return f"🖼️ **Image Generated Successfully**\n\n{img_url}"
+        return "⚠️ Image generation failed. Please try again later."
 
-    # Tier-based model routing
     def _try_chain(options):
         for label, fn in options:
             try:
@@ -894,13 +888,17 @@ def route_ai_call(tier: str, prompt: str) -> str:
 
             if reply:
                 print(f"[DEBUG] {tier} → {label} used")
-                return json.dumps({"type": "text", "content": reply})
+                return reply
 
         print(f"[DEBUG] {tier} → All failed, echo")
-        return json.dumps({
-            "type": "error",
-            "content": f"⚠️ **System Notice**\n\n> {prompt}\n\n_Tip: Please retry later._"
-        })
+        return f"""⚠️ **System Notice**
+
+• I couldn’t reach any AI models.  
+• Here’s what you sent me:  
+
+> {prompt}
+
+_Tip: Please retry in a moment._"""
 
     # BASIC — gpt-4o-mini priority
     if tier == "Basic":
@@ -946,8 +944,7 @@ def route_ai_call(tier: str, prompt: str) -> str:
             ("OpenRouter", _openrouter_chat)
         ])
 
-    return json.dumps({"type": "error", "content": f"(Unknown tier: {tier}) {prompt}"})
-
+    return f"(Unknown tier: {tier}) {prompt}"
 
 
 
@@ -2563,6 +2560,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
