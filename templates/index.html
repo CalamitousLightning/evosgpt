@@ -101,11 +101,19 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      gap: 8px;
     }
-    header h1 img {
-      width: 20px;
-      height: 20px;
-      margin-right: 6px;
+
+    /* Spinning logo animation */
+    .spin-logo {
+      width: 28px;
+      height: 28px;
+      animation: spin 5s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
 
     .auth-links a {
@@ -280,8 +288,8 @@
     <header>
       <span class="menu-btn" onclick="toggleSidebar()">☰</span>
       <h1>
-        <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" alt="EVOSGPT Logo">
-        EVOSGPT {{ icon }} {{ tier }} Mode
+        <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" class="spin-logo" alt="EVOSGPT Logo">
+        {{ tier }} Mode
       </h1>
       <div class="auth-links">
         {% if not logged_in %}
@@ -418,4 +426,3 @@
   </script>
 </body>
 </html>
-
