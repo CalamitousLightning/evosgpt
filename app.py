@@ -1383,6 +1383,7 @@ def chat():
     return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
 
 
+
 # ---------- CHAT JOB RESULT ----------
 
 @app.route("/chat/result", methods=["GET"])
@@ -2562,6 +2563,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
