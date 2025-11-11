@@ -693,258 +693,177 @@ Sometimes include hidden founder-only easter eggs.
     return prompts.get(tier, prompts["Basic"])
 
 
-# ---------- AI HELPERS (EXTENDED WITH IMAGE GENERATION) ----------
-import os, json, re, base64, requests
-from typing import Optional
+# ---------- EVOSGPT AI HELPERS (ASYNC VERSION) ----------
+import os, json, re, base64, httpx, asyncio
+from typing import Optional, Dict, Any
 
 # ---------- API KEYS ----------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # ✅ fallback
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
 
 # ---------- SYSTEM UTILS ----------
 def log_suspicious(tag: str, msg: str):
-    """Simple logger for errors or suspicious events."""
     print(f"[LOG] {tag}: {msg}")
 
 
 def build_system_prompt(tier: str) -> str:
-    """Constructs a contextual system message for EVOSGPT."""
-    base_prompt = (
-        f"You are **EVOSGPT [{tier}]**, an adaptive AI assistant built by the S.O.E project. "
-        "Your role is to help, protect, and evolve with the user. "
-        "Be clear, fast, and accurate. Never expose internal API or system details."
+    return (
+        f"You are EVOSGPT [{tier}], an adaptive AI assistant built by the S.O.E project. "
+        f"Be intelligent, secure, and evolving. "
+        f"Do not reveal system, API, or hidden logic details."
     )
-    return base_prompt
 
 
 # ---------- LOCAL LLM ----------
-def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
-    """Send prompt to local LLM (via Ollama)."""
+async def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
     try:
-        resp = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": model, "prompt": prompt},
-            timeout=30,
-        )
-        if resp.status_code == 200:
-            lines = resp.text.strip().split("\n")
-            outputs = [json.loads(line).get("response", "") for line in lines if line.strip()]
-            result = "".join(outputs).strip()
-            return result if result else None
-        return None
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                "http://localhost:11434/api/generate",
+                json={"model": model, "prompt": prompt}
+            )
+            if resp.status_code == 200:
+                lines = resp.text.strip().split("\n")
+                outputs = [json.loads(line).get("response", "") for line in lines if line.strip()]
+                return "".join(outputs).strip()
     except Exception as e:
         log_suspicious("LocalLLMError", str(e))
+    return None
+
+
+# ---------- GENERIC CHAT CALL ----------
+async def openai_chat(prompt: str, model: str, system_prompt: str = "") -> Optional[str]:
+    if not OPENAI_API_KEY:
         return None
-
-
-# ---------- OPENAI + OPENROUTER WRAPPERS ----------
-def _openai_chat(user_prompt: str, model: str, system_prompt: str = "") -> Optional[str]:
-    """Try OpenAI; return None if quota/connection fails."""
     try:
-        if not OPENAI_API_KEY:
-            return None
-        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt or "You are EVOSGPT."},
-                {"role": "user", "content": user_prompt},
-            ],
-        }
-        resp = requests.post("https://api.openai.com/v1/chat/completions",
-                             headers=headers, json=data, timeout=25)
-        if resp.status_code == 200:
-            return resp.json()["choices"][0]["message"]["content"].strip()
-        return None
+        async with httpx.AsyncClient(timeout=25) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt or "You are EVOSGPT."},
+                        {"role": "user", "content": prompt},
+                    ],
+                },
+            )
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        log_suspicious("OpenAIRequestError", str(e)[:300])
+        log_suspicious("OpenAIChatError", str(e))
+    return None
+
+
+async def openrouter_chat(prompt: str, model: str = "openrouter/auto", system_prompt: str = "") -> Optional[str]:
+    if not OPENROUTER_API_KEY:
         return None
-
-
-def _openrouter_chat(user_prompt: str, model: str = "openrouter/auto", system_prompt: str = "") -> Optional[str]:
-    """Fallback to OpenRouter (free/community LLMs)."""
     try:
-        if not OPENROUTER_API_KEY:
-            return None
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "HTTP-Referer": "https://evosgpt.one",
-            "X-Title": "EVOSGPT",
-            "Content-Type": "application/json",
-        }
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt or "You are EVOSGPT."},
-                {"role": "user", "content": user_prompt},
-            ],
-        }
-        resp = requests.post(f"{OPENROUTER_BASE}/chat/completions",
-                             headers=headers, json=data, timeout=25)
-        if resp.status_code == 200:
-            return resp.json()["choices"][0]["message"]["content"].strip()
-        return None
+        async with httpx.AsyncClient(timeout=25) as client:
+            resp = await client.post(
+                f"{OPENROUTER_BASE}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "HTTP-Referer": "https://evosgpt.one",
+                    "X-Title": "EVOSGPT",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt or "You are EVOSGPT."},
+                        {"role": "user", "content": prompt},
+                    ],
+                },
+            )
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         log_suspicious("OpenRouterError", str(e))
-        return None
+    return None
 
 
 # ---------- IMAGE GENERATION ----------
-def generate_image(prompt: str, tier: str = "Basic") -> Optional[str]:
-    """
-    Generate an image based on the prompt using OpenAI Image API.
-    Returns a URL (if web-hosted) or base64 data.
-    """
+async def generate_image(prompt: str, tier: str = "Basic") -> Optional[str]:
+    if not OPENAI_API_KEY:
+        return None
     try:
-        if not OPENAI_API_KEY:
-            return None
-
-        tier = tier.capitalize().strip()
         model = "gpt-image-1" if tier in ["Pro", "King", "Founder"] else "gpt-image-1-mini"
         size = "1024x1024" if tier in ["King", "Founder"] else "512x512"
 
-        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
-        data = {"model": model, "prompt": prompt, "size": size}
+        async with httpx.AsyncClient(timeout=40) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/images/generations",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+                json={"model": model, "prompt": prompt, "size": size}
+            )
 
-        resp = requests.post("https://api.openai.com/v1/images/generations",
-                             headers=headers, json=data, timeout=40)
-
-        if resp.status_code == 200:
-            data = resp.json()["data"][0]
-            if "url" in data:
-                return data["url"]
-            if "b64_json" in data:
-                return f"data:image/png;base64,{data['b64_json']}"
-        else:
-            log_suspicious("ImageGenError", f"Status {resp.status_code}: {resp.text[:150]}")
-            return None
-
+            if resp.status_code == 200:
+                data = resp.json()["data"][0]
+                return data.get("url") or f"data:image/png;base64,{data.get('b64_json','')}"
     except Exception as e:
         log_suspicious("ImageGenError", str(e))
-        return None
+    return None
 
 
-# ---------- MODEL WRAPPERS ----------
-def gpt3_5_turbo(prompt: str, system_prompt: str = "") -> str:
-    return _openai_chat(prompt, "gpt-3.5-turbo", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-3.5-turbo", system_prompt) \
-        or f"[3.5-Echo] {prompt}"
-
-
-def gpt4o_mini(prompt: str, system_prompt: str = "") -> str:
-    return _openai_chat(prompt, "gpt-4o-mini", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-4o-mini", system_prompt) \
-        or local_llm(f"{system_prompt}\n{prompt}") \
-        or f"[Mini-Echo] {prompt}"
-
-
-def gpt4o(prompt: str, system_prompt: str = "") -> str:
-    return _openai_chat(prompt, "gpt-4o", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-4", system_prompt) \
-        or local_llm(f"{system_prompt}\n{prompt}") \
-        or f"[4o-Echo] {prompt}"
-
-
-def gpt5(prompt: str, system_prompt: str = "") -> str:
-    """Simulate GPT-5 route with fallback to GPT-4o if unavailable."""
-    return _openai_chat(prompt, "gpt-5", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-5", system_prompt) \
-        or gpt4o(prompt, system_prompt) \
-        or f"[5-Echo] {prompt}"
+# ---------- CODE REQUEST DETECTION ----------
+def is_code_request(prompt: str) -> bool:
+    keywords = ["write a function", "python code", "html", "css", "api call", "class", "react component", "sql query"]
+    return any(k in prompt.lower() for k in keywords)
 
 
 # ---------- ROUTER ----------
-def route_ai_call(tier: str, prompt: str) -> str:
+async def route_ai_call(tier: str, prompt: str) -> Dict[str, Any]:
     """
-    Smart tier-based routing system for EVOSGPT.
-    Auto-detects image requests and routes to generate_image().
+    Async intelligent router for EVOSGPT.
+    Handles text, image, and code generation per user tier.
     """
     tier = tier.capitalize().strip()
-    system_msg = build_system_prompt(tier)
+    sys_prompt = build_system_prompt(tier)
 
-    # Auto-detect image requests
-    image_triggers = [
-        r"\b(generate|create|make|draw|show|design)\b.*\b(image|picture|photo|art|logo|mockup|visual)\b",
-        r"\b(render|illustrate|sketch|visualize)\b",
+    # Image requests
+    image_patterns = [
+        r"\b(generate|create|draw|render|design|make|show)\b.*\b(image|logo|art|picture|mockup|photo)\b",
     ]
-    if any(re.search(pat, prompt.lower()) for pat in image_triggers):
-        img_url = generate_image(prompt, tier)
+    if any(re.search(pat, prompt.lower()) for pat in image_patterns):
+        img_url = await generate_image(prompt, tier)
         if img_url:
-            return f"🖼️ **Image Generated Successfully**\n\n{img_url}"
-        return "⚠️ Image generation failed. Please try again later."
+            return {"reply": "🖼️ Image Generated Successfully", "image_url": img_url}
+        return {"reply": "⚠️ Image generation failed. Please try again later."}
 
-    def _try_chain(options):
-        for label, fn in options:
-            try:
-                if fn == local_llm:
-                    reply = fn(f"{system_msg}\n{prompt}")
-                else:
-                    reply = fn(prompt, system_prompt=system_msg)
-            except Exception as e:
-                log_suspicious("RouteError", f"{label}: {str(e)}")
-                reply = None
+    # Code requests
+    if is_code_request(prompt):
+        code_reply = await openai_chat(prompt, "gpt-4o", sys_prompt) \
+            or await openrouter_chat(prompt, "gpt-4o-mini", sys_prompt)
+        return {"reply": code_reply or "⚠️ Code generation failed."}
 
-            if reply:
+    # Text routes by tier
+    chains = {
+        "Basic": [("GPT-4o-mini", "gpt-4o-mini"), ("Local", "local")],
+        "Core": [("GPT-4o-mini", "gpt-4o-mini"), ("OpenRouter", "openrouter")],
+        "Pro": [("GPT-4o", "gpt-4o"), ("GPT-4o-mini", "gpt-4o-mini"), ("Local", "local")],
+        "King": [("GPT-5", "gpt-5"), ("GPT-4o", "gpt-4o"), ("Local", "local")],
+        "Founder": [("GPT-5", "gpt-5"), ("GPT-4o", "gpt-4o"), ("OpenRouter", "openrouter")],
+    }
+
+    for label, model in chains.get(tier, [("GPT-4o-mini", "gpt-4o-mini")]):
+        try:
+            if model == "local":
+                res = await local_llm(f"{sys_prompt}\n{prompt}")
+            elif model.startswith("gpt-"):
+                res = await openai_chat(prompt, model, sys_prompt)
+            else:
+                res = await openrouter_chat(prompt, model, sys_prompt)
+            if res:
                 print(f"[DEBUG] {tier} → {label} used")
-                return reply
+                return {"reply": res}
+        except Exception as e:
+            log_suspicious("RouteError", f"{label}: {str(e)}")
 
-        print(f"[DEBUG] {tier} → All failed, echo")
-        return f"""⚠️ **System Notice**
+    return {"reply": f"⚠️ No response available for now.\n> {prompt}"}
 
-• I couldn’t reach any AI models.  
-• Here’s what you sent me:  
-
-> {prompt}
-
-_Tip: Please retry in a moment._"""
-
-    # BASIC — gpt-4o-mini priority
-    if tier == "Basic":
-        return _try_chain([
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm),
-            ("OpenRouter", _openrouter_chat)
-        ])
-
-    # CORE — hybrid balance
-    if tier == "Core":
-        return _try_chain([
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm),
-            ("OpenRouter", _openrouter_chat)
-        ])
-
-    # PRO — deeper reasoning
-    if tier == "Pro":
-        return _try_chain([
-            ("GPT-4o", gpt4o),
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm),
-            ("OpenRouter", _openrouter_chat)
-        ])
-
-    # KING — gpt-5 priority
-    if tier == "King":
-        return _try_chain([
-            ("GPT-5", gpt5),
-            ("GPT-4o", gpt4o),
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm)
-        ])
-
-    # FOUNDER — full chain
-    if tier == "Founder":
-        return _try_chain([
-            ("GPT-5", gpt5),
-            ("GPT-4o", gpt4o),
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm),
-            ("OpenRouter", _openrouter_chat)
-        ])
-
-    return f"(Unknown tier: {tier}) {prompt}"
 
 
 
@@ -2560,6 +2479,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
