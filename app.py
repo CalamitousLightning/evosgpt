@@ -1215,28 +1215,47 @@ def index():
         referrals_used=referrals_used
     )
 
-# ---------- CHAT ROUTE + FORMATTERS (Flask Safe Version) ----------
+# ---------- CHAT ROUTE + FORMATTERS (EVOSGPT PROTECTED) ----------
 import re
 import sqlite3
 import os
+import uuid
+import requests
 from flask import request, session, jsonify
 
-# --- Helper Formatter ---
+# ---------- FORMATTER ----------
 def auto_paragraph(text: str) -> str:
+    """
+    Force replies into readable Markdown paragraphs while preserving:
+    - fenced code blocks (```...```)
+    - existing list-lines that start with -, *, • or digit.
+    - headers (# ...) and quotes (> ...)
+    Splits into sentences and creates clean paragraphs.
+    """
     if not text:
         return ""
+
     text = text.replace("\r\n", "\n")
+
+    # Split out fenced code blocks
     parts = re.split(r'(```[\s\S]*?```)', text, flags=re.MULTILINE)
     out_parts = []
+
     for idx, part in enumerate(parts):
-        if idx % 2 == 1:
+        if idx % 2 == 1:  # code block
             out_parts.append(part.strip())
             continue
+
+        # Split into blocks by blank lines
         segments = [seg.strip() for seg in re.split(r'\n\s*\n', part) if seg.strip()]
         for seg in segments:
-            if re.search(r'^\s*([-*•]|\d+\.)\s+', seg, flags=re.MULTILINE) or re.match(r'^\s*(#+\s|> )', seg):
+            # Preserve lists, headers, quotes as-is
+            if re.search(r'^\s*([-*•]|\d+\.)\s+', seg, flags=re.MULTILINE) \
+               or re.match(r'^\s*(#+\s|> )', seg):
                 out_parts.append(seg)
                 continue
+
+            # Split into sentences
             sentences = re.split(r'(?<=[.!?])\s+', seg)
             for s in sentences:
                 s = s.strip()
@@ -1244,172 +1263,152 @@ def auto_paragraph(text: str) -> str:
                     continue
                 s = s.replace('\n', ' ')
                 out_parts.append(s)
-    return '\n\n'.join(out_parts).strip()
 
-# --- Temporary AI Mock Helpers ---
-def UserCore(prompt, tier): return f"[UserCore] {prompt}"
-def LogicCore(prompt, tier): return f"[LogicCore] {prompt}"
-def CodeCore(prompt, tier): return f"[CodeCore] {prompt}"
-def WebCore(prompt, tier): return f"[WebCore] {prompt}"
-def ImageCore(prompt, tier): return f"[ImageCore] {prompt}"
-def SystemCore(prompt): return f"[System Summary] {prompt}"
+    return '\n\n'.join([p for p in out_parts if p]).strip()
 
-# --- Chat Route ---
+
+# ---------- SIMPLE IMAGE GENERATOR ----------
+def generate_image(prompt: str) -> str:
+    """
+    Placeholder image generation logic.
+    You can replace this with:
+      - a call to your /image endpoint
+      - DALL-E API
+      - local image generation service
+    For now, returns a placeholder Unsplash image.
+    """
+    try:
+        safe_prompt = re.sub(r'[^a-zA-Z0-9 ]+', '', prompt)[:40] or "ai-art"
+        return f"https://source.unsplash.com/800x600/?{safe_prompt}"
+    except Exception:
+        return "https://placehold.co/600x400?text=Image+Unavailable"
+
+
+# ---------- AI ROUTER ----------
+def route_ai_call(tier: str, message: str) -> str:
+    ui = message.lower()
+
+    # --- Image Requests ---
+    if any(k in ui for k in ["image", "picture", "photo", "generate", "draw", "render", "create art"]):
+        img_url = generate_image(message)
+        return f"<img src='{img_url}' alt='Generated Image' class='evos-image' style='max-width:100%;border-radius:1rem;' />"
+
+    # --- Coding Requests ---
+    elif any(k in ui for k in ["python", "code", "script", "program", "api", "algorithm"]):
+        # you can replace this with await CodeCore(...)
+        return "```python\n# Example code block\nprint('Hello from EVOSGPT!')\n```"
+
+    # --- Normal AI Replies ---
+    else:
+        # Replace this call with UserCore or your LLM wrapper
+        return f"Hi! You said: **{message}**\n\nThis is EVOSGPT ({tier} mode)."
+
+
+# ---------- MAIN CHAT ROUTE ----------
 @app.route("/chat", methods=["POST"])
 def chat():
-    """Main EVOSGPT chat route with guest handling, tier routing, memory recall, and AI helper delegation."""
-    try:
-        data = request.get_json(silent=True) or {}
-        user_msg = (data.get("message") or "").strip()
-        ui = user_msg.lower()
-        tier = session.get("tier", "Basic")
-        reply = None
-        guest_id = None
+    data = request.get_json(silent=True) or {}
+    user_msg = (data.get("message") or "").strip()
+    ui = user_msg.lower()
 
-        # --- Guest Mode ---
-        if "user_id" not in session:
-            if "guest_id" not in session:
-                token = os.urandom(16).hex()
+    tier = session.get("tier", "Basic")
+    reply = None
+
+    # --- Guest mode ---
+    guest_id = None
+    if "user_id" not in session:
+        if "guest_id" not in session:
+            token = os.urandom(16).hex()
+            conn = sqlite3.connect("database/memory.db")
+            c = conn.cursor()
+            c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
+            guest_id = c.lastrowid
+            conn.commit(); conn.close()
+            session["guest_id"] = guest_id
+            session["guest_count"] = 0
+        else:
+            guest_id = session["guest_id"]
+
+        guest_count = session.get("guest_count", 0)
+        if guest_count >= 5:
+            return jsonify({
+                "reply": "🚪 Guest mode limit reached. Redirecting to registration…",
+                "redirect": "/register"
+            })
+
+        session["guest_count"] = guest_count + 1
+        if session["guest_count"] == 4:
+            return jsonify({
+                "reply": "⚠ You have 1 free chat left. Please register or log in to continue."
+            })
+
+    # --- Founder unlock sequence ---
+    if "user_id" in session:
+        seq = session.get("founder_seq", 0)
+        if seq == 0 and ui == "evosgpt where you created":
+            reply = "lab"; session["founder_seq"] = 1
+        elif seq == 1 and ui == "ghanaherewecome":
+            reply = "are you coming to Ghana?"; session["founder_seq"] = 2
+        elif seq == 2 and ui == "nameless":
+            reply = "[SYSTEM] Founder tier unlocked. Welcome, hidden user."
+            session["founder_seq"] = 0; session["tier"] = "Founder"
+            try:
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
-                c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
-                guest_id = c.lastrowid
+                c.execute("UPDATE users SET tier=? WHERE id=?", ("Founder", session["user_id"]))
                 conn.commit(); conn.close()
-                session["guest_id"] = guest_id
-                session["guest_count"] = 0
-            else:
-                guest_id = session["guest_id"]
-
-            guest_count = session.get("guest_count", 0)
-            if guest_count >= 5:
-                return jsonify({"reply": "🚪 Guest mode limit reached.", "redirect": "/register"})
-            session["guest_count"] = guest_count + 1
-            if session["guest_count"] == 4:
-                return jsonify({"reply": "⚠ You have 1 free chat left. Please register or log in to continue."})
-
-        # --- Founder Unlock ---
-        if "user_id" in session:
-            seq = session.get("founder_seq", 0)
-            if seq == 0 and ui == "evosgpt where you created":
-                reply = "lab"; session["founder_seq"] = 1
-            elif seq == 1 and ui == "ghanaherewecome":
-                reply = "are you coming to Ghana?"; session["founder_seq"] = 2
-            elif seq == 2 and ui == "nameless":
-                reply = "[SYSTEM] Founder tier unlocked. Welcome, hidden user."
-                session.update({"founder_seq": 0, "tier": "Founder"})
-                try:
-                    conn = sqlite3.connect("database/memory.db")
-                    c = conn.cursor()
-                    c.execute("UPDATE users SET tier=? WHERE id=?", ("Founder", session["user_id"]))
-                    conn.commit(); conn.close()
-                except Exception as e:
-                    log_suspicious("FounderUnlockFail", str(e))
-            elif tier == "Founder" and ui == "logout evosgpt":
-                reply = "[SYSTEM] Founder mode deactivated. Returning to Basic tier."
-                session["tier"] = "Basic"
-                try:
-                    conn = sqlite3.connect("database/memory.db")
-                    c = conn.cursor()
-                    c.execute("UPDATE users SET tier=? WHERE id=?", ("Basic", session["user_id"]))
-                    conn.commit(); conn.close()
-                except Exception as e:
-                    log_suspicious("FounderLogoutFail", str(e))
-            elif seq > 0:
+            except Exception as e:
+                log_suspicious("FounderUnlockFail", str(e))
+        elif tier == "Founder" and ui == "logout evosgpt":
+            reply = "[SYSTEM] Founder mode deactivated. Returning to Basic tier."
+            session["tier"] = "Basic"
+            try:
+                conn = sqlite3.connect("database/memory.db")
+                c = conn.cursor()
+                c.execute("UPDATE users SET tier=? WHERE id=?", ("Basic", session["user_id"]))
+                conn.commit(); conn.close()
+            except Exception as e:
+                log_suspicious("FounderLogoutFail", str(e))
+        else:
+            if seq > 0 and ui not in ["evosgpt where you created", "ghanaherewecome", "nameless"]:
                 session["founder_seq"] = 0
 
-        # --- Memory Recall ---
-        long_summary, global_context = "", ""
+    # --- AI Router ---
+    if reply is None:
         try:
-            conn = sqlite3.connect("database/memory.db")
-            c = conn.cursor()
-            if "user_id" in session:
-                c.execute("SELECT summary FROM long_memory WHERE user_id=? LIMIT 1", (session["user_id"],))
-                r = c.fetchone()
-                if r and r[0]:
-                    long_summary = r[0]
-            c.execute("SELECT content FROM global_memory ORDER BY importance DESC, timestamp DESC LIMIT 2")
-            rows = c.fetchall()
-            if rows:
-                global_context = "\n".join([r[0] for r in rows])
-            conn.close()
+            raw_reply = route_ai_call(tier, user_msg)
+            reply = auto_paragraph(raw_reply)
         except Exception as e:
-            log_suspicious("MemoryRecallFail", str(e))
+            log_suspicious("LLMError", str(e))
+            reply = f"⚠️ **System Error**\n\n> {user_msg}"
 
-        # --- AI Routing Layer ---
-        if reply is None:
-            try:
-                memory_prefix = ""
-                if long_summary:
-                    memory_prefix += f"[User Memory Summary]: {long_summary}\n"
-                if global_context:
-                    memory_prefix += f"[Global Context]: {global_context}\n"
-                prompt = f"{memory_prefix}{user_msg}"
+    # --- Save chat ---
+    try:
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
 
-                if any(k in ui for k in ["python", "code", "script", "program", "api", "algorithm"]):
-                    raw_reply = CodeCore(prompt, tier)
-                elif any(k in ui for k in ["image", "draw", "diagram", "chart", "generate picture"]):
-                    raw_reply = ImageCore(prompt, tier)
-                elif any(k in ui for k in ["analyze", "explain", "summarize", "translate", "logic", "reasoning"]):
-                    raw_reply = LogicCore(prompt, tier)
-                elif any(k in ui for k in ["search", "latest", "news", "lookup", "find"]):
-                    raw_reply = WebCore(prompt, tier)
-                else:
-                    raw_reply = UserCore(prompt, tier)
+        if "user_id" in session:
+            uid = session["user_id"]
+            c.execute(
+                "INSERT INTO memory (user_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
+                (uid, user_msg, reply)
+            )
+            conn.commit()
+            enforce_memory_limit(uid, tier)
+        elif guest_id:
+            c.execute(
+                "INSERT INTO memory (guest_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
+                (guest_id, user_msg, reply)
+            )
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        log_suspicious("ChatInsertFail", str(e))
 
-                reply = auto_paragraph(raw_reply)
+    return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
 
-            except Exception as e:
-                log_suspicious("LLMRouteFail", str(e))
-                reply = f"⚠️ AI Processing Error.\n> {user_msg}"
 
-        # --- Store Memory ---
-        try:
-            conn = sqlite3.connect("database/memory.db")
-            c = conn.cursor()
-            if "user_id" in session:
-                uid = session["user_id"]
-                c.execute("INSERT INTO memory (user_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
-                          (uid, user_msg, reply))
-                conn.commit()
-                enforce_memory_limit(uid, tier)
-            elif guest_id:
-                c.execute("INSERT INTO memory (guest_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
-                          (guest_id, user_msg, reply))
-                conn.commit()
-            conn.close()
-        except Exception as e:
-            log_suspicious("ChatInsertFail", str(e))
-
-        # --- Summarization ---
-        try:
-            if "user_id" in session:
-                uid = session["user_id"]
-                conn = sqlite3.connect("database/memory.db")
-                c = conn.cursor()
-                c.execute("SELECT COUNT(*) FROM memory WHERE user_id=?", (uid,))
-                count = c.fetchone()[0]
-                if count % 10 == 0 and count > 0:
-                    c.execute("SELECT user_input, bot_response FROM memory WHERE user_id=? ORDER BY id DESC LIMIT 20", (uid,))
-                    rows = c.fetchall()
-                    convo = "\n".join([f"User: {u}\nAI: {b}" for u, b in rows])
-                    summary_prompt = f"Summarize this conversation in 1-2 sentences:\n{convo}"
-                    summary = SystemCore(summary_prompt)
-                    c.execute("""
-                        INSERT INTO long_memory (user_id, summary, last_updated)
-                        VALUES (?, ?, CURRENT_TIMESTAMP)
-                        ON CONFLICT(user_id) DO UPDATE SET summary=excluded.summary, last_updated=CURRENT_TIMESTAMP;
-                    """, (uid, summary))
-                    conn.commit()
-                conn.close()
-        except Exception as e:
-            log_suspicious("LongMemoryUpdateFail", str(e))
-
-        return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
-
-    except Exception as main_e:
-        log_suspicious("ChatRouteFail", str(main_e))
-        return jsonify({"reply": "⚠️ Internal chat route error.", "tier": "Basic"})
-
+# ---------- CHAT JOB RESULT ----------
 
 @app.route("/chat/result", methods=["GET"])
 def chat_result():
@@ -2588,6 +2587,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
