@@ -3,15 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="EVOSGPT — Smart, Secure, and Evolving Chat AI." />
+  <meta name="description" content="EVOSGPT — Built for You, Designed to Evolve. Smart, Secure, and Evolving Chat AI." />
   <title>EVOSGPT</title>
 
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/evosgpt-icon.png') }}">
-
-  <!-- Markdown and Syntax Highlighting -->
   <script src="{{ url_for('static', filename='js/marked.min.js') }}"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
   <style>
     :root {
@@ -48,9 +44,6 @@
       overflow: hidden;
     }
 
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .spin { animation: spin 4s linear infinite; }
-
     /* Sidebar */
     #sidebar {
       width: 260px;
@@ -66,17 +59,22 @@
       display: flex;
       flex-direction: column;
     }
-
     #sidebar a {
       display: block;
       padding: 12px;
       color: white;
       text-decoration: none;
     }
-
     #sidebar a:hover { background: var(--primary-color); }
     #sidebar.active { left: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.4); }
-    #overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; z-index: 1000; }
+
+    #overlay {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      z-index: 1000;
+    }
     #overlay.active { display: block; }
 
     .hub-toggle { cursor: pointer; padding: 12px; font-weight: bold; background: #333; border-top: 1px solid #444; }
@@ -103,29 +101,41 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 8px;
     }
 
-    header h1 img { width: 24px; height: 24px; }
+    /* Spinning logo animation */
+    .spin-logo {
+      width: 28px;
+      height: 28px;
+      animation: spin 5s linear infinite;
+    }
 
-    .tier-icon {
-      width: 20px; height: 20px; border-radius: 50%;
-      background: var(--primary-color);
-      display: inline-block;
-      margin-left: 6px;
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
 
     .auth-links a {
-      color: white; margin-left: 10px; text-decoration: none; font-size: 14px;
+      color: white;
+      margin-left: 10px;
+      text-decoration: none;
+      font-size: 14px;
     }
 
     #theme-toggle {
-      background: transparent; border: none; color: white;
-      font-size: 18px; cursor: pointer; margin-left: 10px;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      margin-left: 10px;
     }
 
     #upgrade-btn {
-      position: fixed; top: 55px; left: 50%;
+      position: fixed;
+      top: 55px;
+      left: 50%;
       transform: translateX(-50%);
       background: var(--primary-color);
       color: white;
@@ -133,10 +143,18 @@
       border-radius: 18px;
       font-weight: bold;
       font-size: 13px;
-      border: none; cursor: pointer; z-index: 998;
+      border: none;
+      cursor: pointer;
+      z-index: 998;
     }
 
-    #main-wrapper { display: flex; flex-direction: column; flex: 1; overflow: hidden; background: var(--chat-bot-bg); }
+    #main-wrapper {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+      background: var(--chat-bot-bg);
+    }
 
     #chat-box {
       flex: 1 1 auto;
@@ -154,60 +172,89 @@
       margin: 6px 0;
       padding: 10px 14px;
       border-radius: 12px;
-      line-height: 1.5;
+      line-height: 1.4;
       word-wrap: break-word;
       position: relative;
     }
-
-    .user { background: var(--chat-user-bg); color: var(--chat-user-text); align-self: flex-end; border-bottom-right-radius: 0; }
-    .bot { background: var(--chat-bot-bg); color: var(--chat-bot-text); align-self: flex-start; border-bottom-left-radius: 0; border: 1px solid var(--border-color); }
-
-    pre code {
-      display: block; overflow-x: auto; padding: 8px;
-      border-radius: 8px; background: #1e1e1e; color: #f5f5f5;
-      font-size: 14px;
+    .user {
+      background: var(--chat-user-bg);
+      color: var(--chat-user-text);
+      align-self: flex-end;
+      border-bottom-right-radius: 0;
     }
-
-    img.generated {
-      max-width: 80%; border-radius: 10px; margin-top: 6px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    .bot {
+      background: var(--chat-bot-bg);
+      color: var(--chat-bot-text);
+      align-self: flex-start;
+      border-bottom-left-radius: 0;
+      border: 1px solid var(--border-color);
     }
 
     .copy-btn {
-      position: absolute; right: 10px; bottom: 8px;
-      background: transparent; border: none; cursor: pointer;
-      color: var(--primary-color); font-size: 13px;
+      position: absolute;
+      right: 10px;
+      bottom: 8px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--primary-color);
+      font-size: 13px;
     }
 
     #chat-form {
-      display: flex; align-items: flex-end;
-      background: var(--chat-bot-bg); padding: 10px;
+      display: flex;
+      align-items: flex-end;
+      background: var(--chat-bot-bg);
+      padding: 10px;
       border-top: 1px solid var(--border-color);
-      position: fixed; bottom: 0; left: 0; right: 0;
-      box-sizing: border-box; box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      box-sizing: border-box;
+      box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
       z-index: 50;
     }
 
     #message {
-      flex: 1; padding: 10px; border-radius: 20px;
+      flex: 1;
+      padding: 10px;
+      border-radius: 20px;
       border: 1px solid var(--border-color);
-      resize: none; font-family: inherit; overflow-y: auto;
-      min-height: 40px; max-height: 140px; line-height: 1.4;
-      background: var(--chat-bot-bg); color: var(--chat-bot-text);
-      font-size: 16px; transition: background 0.3s, color 0.3s;
+      resize: none;
+      font-family: inherit;
+      overflow-y: auto;
+      min-height: 40px;
+      max-height: 140px;
+      line-height: 1.4;
+      background: var(--chat-bot-bg);
+      color: var(--chat-bot-text);
+      font-size: 16px;
+      transition: background 0.3s, color 0.3s;
     }
 
     #chat-form button {
-      margin-left: 8px; padding: 8px 14px;
-      background: var(--primary-color); color: white;
-      border: none; border-radius: 12px;
-      font-weight: bold; cursor: pointer;
+      margin-left: 8px;
+      padding: 8px 14px;
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    @media (max-width: 600px) {
+      #chat-form { padding: 8px; }
+    }
+
+    @supports (env(safe-area-inset-bottom)) {
+      #chat-form { padding-bottom: calc(env(safe-area-inset-bottom) + 8px); }
     }
   </style>
 </head>
 
 <body>
-  <!-- Sidebar -->
   <div id="sidebar">
     <a href="javascript:void(0)" onclick="toggleSidebar()">⬅ Back</a>
     <a href="/chat">💬 Chat</a>
@@ -219,7 +266,9 @@
       <a href="/tiers">📖 Tiers</a>
       <a href="/referral">🎁 Invite</a>
       <a href="/evostoken">🪙 EvosToken</a>
-      {% if tier in ["King", "Founder"] %}<a href="/admin">🛠 Admin</a>{% endif %}
+      {% if tier in ["King", "Founder"] %}
+        <a href="/admin">🛠 Admin</a>
+      {% endif %}
       <a href="javascript:void(0)" onclick="clearChat()">🧹 Clear Chat</a>
       {% if not logged_in %}
         <a href="/login">🔑 Login</a>
@@ -239,8 +288,7 @@
     <header>
       <span class="menu-btn" onclick="toggleSidebar()">☰</span>
       <h1>
-        <img class="spin" src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" alt="EVOSGPT Logo">
-        <span class="tier-icon spin" title="{{ tier }}"></span>
+        <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" class="spin-logo" alt="EVOSGPT Logo">
         {{ tier }} Mode
       </h1>
       <div class="auth-links">
@@ -263,20 +311,24 @@
   </form>
 
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      if (window.hljs) hljs.highlightAll();
-    });
-
     const chatBox = document.getElementById("chat-box");
     const textarea = document.getElementById("message");
 
     function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
+
     function saveChat() { localStorage.setItem("evos_chat_history", chatBox.innerHTML); }
     function loadChat() {
       const saved = localStorage.getItem("evos_chat_history");
-      if (saved) { chatBox.innerHTML = saved; scrollToBottom(); }
+      if (saved) {
+        chatBox.innerHTML = saved;
+        adjustChatPadding();
+        scrollToBottom();
+      }
     }
-    function clearChat() { localStorage.removeItem("evos_chat_history"); chatBox.innerHTML = ""; }
+    function clearChat() {
+      localStorage.removeItem("evos_chat_history");
+      chatBox.innerHTML = "";
+    }
 
     loadChat();
 
@@ -287,12 +339,10 @@
 
       chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${text}</div>`);
       saveChat(); scrollToBottom();
-      textarea.value = "";
+      textarea.value = ""; textarea.style.height = "40px"; adjustChatPadding();
 
       const typing = document.createElement("div");
-      typing.className = "msg bot";
-      typing.id = "typing-bubble";
-      typing.innerText = "EVOSGPT is thinking...";
+      typing.className = "msg bot"; typing.id = "typing-bubble"; typing.innerText = "EVOSGPT is typing...";
       chatBox.appendChild(typing); scrollToBottom();
 
       try {
@@ -301,33 +351,35 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: text })
         });
-
         const data = await res.json();
         typing.remove();
 
-        let safeReply = data.reply || "⚠️ No response.";
-        let content = marked.parse(safeReply);
-        const imgMatch = safeReply.match(/(https?:\/\/[^\s]+\.(png|jpg|jpeg|gif))/i);
-        if (imgMatch) content += `<br><img src="${imgMatch[1]}" class="generated">`;
+        let botContent = "";
+        if (data.image_url) {
+          botContent = `<img src="${data.image_url}" alt="Generated Image" style="max-width:100%; border-radius:10px; margin-top:8px;">`;
+        } else if (data.image_base64) {
+          botContent = `<img src="data:image/png;base64,${data.image_base64}" alt="Generated Image" style="max-width:100%; border-radius:10px; margin-top:8px;">`;
+        } else {
+          botContent = marked.parse(data.reply || "⚠ No reply from server.");
+        }
 
         chatBox.insertAdjacentHTML("beforeend", `
           <div class="msg bot">
-            <strong>[${data.tier || "core"}]</strong><br>
-            <div class="bot-content">${content}</div>
+            <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
+            <div class="bot-content">${botContent}</div>
             <button class="copy-btn" onclick="copyText(this)">📋</button>
           </div>
         `);
-
-        if (window.hljs) hljs.highlightAll();
-        saveChat(); scrollToBottom();
+        saveChat(); adjustChatPadding(); scrollToBottom();
       } catch (err) {
         typing.remove();
-        chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot error">⚠️ ${err.message}</div>`);
+        chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot error">⚠ Error: ${err.message}</div>`);
+        saveChat();
       }
     });
 
     textarea.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 768) {
         e.preventDefault();
         document.getElementById("chat-form").dispatchEvent(new Event("submit"));
       }
@@ -350,6 +402,14 @@
       const hub = document.getElementById("hub");
       hub.style.display = hub.style.display === "block" ? "none" : "block";
     }
+
+    function adjustChatPadding() {
+      const form = document.getElementById("chat-form");
+      chatBox.style.paddingBottom = `${form.offsetHeight + 20}px`;
+    }
+
+    window.addEventListener("resize", adjustChatPadding);
+    adjustChatPadding();
 
     const themeToggle = document.getElementById("theme-toggle");
     themeToggle.addEventListener("click", () => {
