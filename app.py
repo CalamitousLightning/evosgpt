@@ -1219,10 +1219,11 @@ def index():
 import re
 import sqlite3
 import os
-import uuid
 import json
+import uuid
 import requests
 from flask import request, session, jsonify
+from helpers import route_ai_call, log_suspicious  # ✅ import from your AI helpers
 
 
 # ---------- FORMATTER ----------
@@ -1269,63 +1270,12 @@ def auto_paragraph(text: str) -> str:
     return '\n\n'.join([p for p in out_parts if p]).strip()
 
 
-# ---------- SIMPLE IMAGE GENERATOR ----------
-def generate_image(prompt: str) -> str:
-    """
-    Placeholder image generation logic.
-    You can replace this with:
-      - a call to your /image endpoint
-      - DALL-E API
-      - local image generation service
-    For now, returns a placeholder Unsplash image.
-    """
-    try:
-        safe_prompt = re.sub(r'[^a-zA-Z0-9 ]+', '', prompt)[:40] or "ai-art"
-        return f"https://source.unsplash.com/800x600/?{safe_prompt}"
-    except Exception:
-        return "https://placehold.co/600x400?text=Image+Unavailable"
-
-
-# ---------- AI ROUTER ----------
-def route_ai_call(tier: str, message: str) -> str:
-    """
-    Directs the message to the correct response generator.
-    Returns a JSON string (type + content), allowing
-    downstream parsing for different content types.
-    """
-    ui = message.lower()
-
-    # --- Image Requests ---
-    if any(k in ui for k in ["image", "picture", "photo", "generate", "draw", "render", "create art"]):
-        img_url = generate_image(message)
-        return json.dumps({
-            "type": "image",
-            "content": "🖼️ Image generated successfully.",
-            "url": img_url
-        })
-
-    # --- Coding Requests ---
-    elif any(k in ui for k in ["python", "code", "script", "program", "api", "algorithm"]):
-        return json.dumps({
-            "type": "text",
-            "content": "```python\n# Example code block\nprint('Hello from EVOSGPT!')\n```"
-        })
-
-    # --- Normal AI Replies ---
-    else:
-        return json.dumps({
-            "type": "text",
-            "content": f"Hi! You said: **{message}**\n\nThis is EVOSGPT ({tier} mode)."
-        })
-
-
 # ---------- MAIN CHAT ROUTE ----------
 @app.route("/chat", methods=["POST"])
 def chat():
     data = request.get_json(silent=True) or {}
     user_msg = (data.get("message") or "").strip()
     ui = user_msg.lower()
-
     tier = session.get("tier", "Basic")
     reply = None
 
@@ -1338,7 +1288,8 @@ def chat():
             c = conn.cursor()
             c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
             guest_id = c.lastrowid
-            conn.commit(); conn.close()
+            conn.commit()
+            conn.close()
             session["guest_id"] = guest_id
             session["guest_count"] = 0
         else:
@@ -1361,17 +1312,21 @@ def chat():
     if "user_id" in session:
         seq = session.get("founder_seq", 0)
         if seq == 0 and ui == "evosgpt where you created":
-            reply = "lab"; session["founder_seq"] = 1
+            reply = "lab"
+            session["founder_seq"] = 1
         elif seq == 1 and ui == "ghanaherewecome":
-            reply = "are you coming to Ghana?"; session["founder_seq"] = 2
+            reply = "are you coming to Ghana?"
+            session["founder_seq"] = 2
         elif seq == 2 and ui == "nameless":
             reply = "[SYSTEM] Founder tier unlocked. Welcome, hidden user."
-            session["founder_seq"] = 0; session["tier"] = "Founder"
+            session["founder_seq"] = 0
+            session["tier"] = "Founder"
             try:
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
                 c.execute("UPDATE users SET tier=? WHERE id=?", ("Founder", session["user_id"]))
-                conn.commit(); conn.close()
+                conn.commit()
+                conn.close()
             except Exception as e:
                 log_suspicious("FounderUnlockFail", str(e))
         elif tier == "Founder" and ui == "logout evosgpt":
@@ -1381,7 +1336,8 @@ def chat():
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
                 c.execute("UPDATE users SET tier=? WHERE id=?", ("Basic", session["user_id"]))
-                conn.commit(); conn.close()
+                conn.commit()
+                conn.close()
             except Exception as e:
                 log_suspicious("FounderLogoutFail", str(e))
         else:
@@ -1393,7 +1349,7 @@ def chat():
         try:
             raw_reply = route_ai_call(tier, user_msg)
 
-            # ✅ Parse AI helper JSON output
+            # ✅ Parse JSON-based responses from AI Helpers
             try:
                 parsed = json.loads(raw_reply)
                 rtype = parsed.get("type", "text")
@@ -1401,16 +1357,18 @@ def chat():
 
                 if rtype == "text":
                     reply = auto_paragraph(content)
+
                 elif rtype == "image":
                     img_url = parsed.get("url", "")
                     reply = f"{content}\n\n<img src='{img_url}' alt='Generated Image' class='evos-image' style='max-width:100%;border-radius:1rem;' />"
+
                 elif rtype == "error":
                     reply = f"⚠️ {content}"
+
                 else:
                     reply = auto_paragraph(content)
 
             except Exception:
-                # fallback if not valid JSON
                 reply = auto_paragraph(raw_reply)
 
         except Exception as e:
@@ -1440,10 +1398,8 @@ def chat():
     except Exception as e:
         log_suspicious("ChatInsertFail", str(e))
 
-    return jsonify({
-        "reply": reply.replace("\\n", "\n"),
-        "tier": tier
-    })
+    return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
+
 
 
 
@@ -2625,6 +2581,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
