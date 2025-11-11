@@ -693,7 +693,7 @@ Sometimes include hidden founder-only easter eggs.
     return prompts.get(tier, prompts["Basic"])
 
 
-# ---------- EVOSGPT AI HELPERS (ASYNC VERSION) ----------
+# ---------- EVOSGPT AI HELPERS (ASYNC VERSION - FASTAPI READY) ----------
 import os, json, re, base64, httpx, asyncio
 from typing import Optional, Dict, Any
 
@@ -702,24 +702,22 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
 
-
 # ---------- SYSTEM UTILS ----------
 def log_suspicious(tag: str, msg: str):
     print(f"[LOG] {tag}: {msg}")
-
 
 def build_system_prompt(tier: str) -> str:
     return (
         f"You are EVOSGPT [{tier}], an adaptive AI assistant built by the S.O.E project. "
         f"Be intelligent, secure, and evolving. "
-        f"Do not reveal system, API, or hidden logic details."
+        f"Do not reveal internal logic or hidden system components."
     )
-
 
 # ---------- LOCAL LLM ----------
 async def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
+    """Call a local model (like Ollama) asynchronously."""
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=40) as client:
             resp = await client.post(
                 "http://localhost:11434/api/generate",
                 json={"model": model, "prompt": prompt}
@@ -732,13 +730,12 @@ async def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
         log_suspicious("LocalLLMError", str(e))
     return None
 
-
-# ---------- GENERIC CHAT CALL ----------
+# ---------- OPENAI / OPENROUTER CALLS ----------
 async def openai_chat(prompt: str, model: str, system_prompt: str = "") -> Optional[str]:
     if not OPENAI_API_KEY:
         return None
     try:
-        async with httpx.AsyncClient(timeout=25) as client:
+        async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
@@ -752,6 +749,8 @@ async def openai_chat(prompt: str, model: str, system_prompt: str = "") -> Optio
             )
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"].strip()
+            else:
+                log_suspicious("OpenAIChatFail", resp.text)
     except Exception as e:
         log_suspicious("OpenAIChatError", str(e))
     return None
@@ -761,7 +760,7 @@ async def openrouter_chat(prompt: str, model: str = "openrouter/auto", system_pr
     if not OPENROUTER_API_KEY:
         return None
     try:
-        async with httpx.AsyncClient(timeout=25) as client:
+        async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 f"{OPENROUTER_BASE}/chat/completions",
                 headers={
@@ -780,66 +779,69 @@ async def openrouter_chat(prompt: str, model: str = "openrouter/auto", system_pr
             )
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"].strip()
+            else:
+                log_suspicious("OpenRouterFail", resp.text)
     except Exception as e:
         log_suspicious("OpenRouterError", str(e))
     return None
 
-
 # ---------- IMAGE GENERATION ----------
 async def generate_image(prompt: str, tier: str = "Basic") -> Optional[str]:
+    """Generate image via OpenAI DALL-E endpoint."""
     if not OPENAI_API_KEY:
         return None
     try:
         model = "gpt-image-1" if tier in ["Pro", "King", "Founder"] else "gpt-image-1-mini"
         size = "1024x1024" if tier in ["King", "Founder"] else "512x512"
-
-        async with httpx.AsyncClient(timeout=40) as client:
+        async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
                 "https://api.openai.com/v1/images/generations",
                 headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
-                json={"model": model, "prompt": prompt, "size": size}
+                json={"model": model, "prompt": prompt, "size": size},
             )
-
             if resp.status_code == 200:
                 data = resp.json()["data"][0]
-                return data.get("url") or f"data:image/png;base64,{data.get('b64_json','')}"
+                return data.get("url") or f"data:image/png;base64,{data.get('b64_json', '')}"
+            else:
+                log_suspicious("ImageGenFail", resp.text)
     except Exception as e:
         log_suspicious("ImageGenError", str(e))
     return None
 
-
-# ---------- CODE REQUEST DETECTION ----------
+# ---------- CODE DETECTION ----------
 def is_code_request(prompt: str) -> bool:
-    keywords = ["write a function", "python code", "html", "css", "api call", "class", "react component", "sql query"]
+    """Detect whether prompt likely asks for code or programming help."""
+    keywords = [
+        "write a function", "python code", "html", "css", "javascript",
+        "api call", "react", "sql query", "class", "def ", "for loop",
+        "program", "code this", "backend", "frontend"
+    ]
     return any(k in prompt.lower() for k in keywords)
 
-
-# ---------- ROUTER ----------
+# ---------- MAIN ROUTER ----------
 async def route_ai_call(tier: str, prompt: str) -> Dict[str, Any]:
     """
-    Async intelligent router for EVOSGPT.
-    Handles text, image, and code generation per user tier.
+    Unified async AI router for EVOSGPT.
+    Handles text, code, and image generation based on user tier.
+    Returns consistent JSON.
     """
     tier = tier.capitalize().strip()
     sys_prompt = build_system_prompt(tier)
 
-    # Image requests
-    image_patterns = [
-        r"\b(generate|create|draw|render|design|make|show)\b.*\b(image|logo|art|picture|mockup|photo)\b",
-    ]
-    if any(re.search(pat, prompt.lower()) for pat in image_patterns):
+    # --- Image Request ---
+    if re.search(r"\b(generate|create|draw|design|make|show)\b.*\b(image|logo|mockup|art|picture|photo)\b", prompt.lower()):
         img_url = await generate_image(prompt, tier)
         if img_url:
             return {"reply": "🖼️ Image Generated Successfully", "image_url": img_url}
         return {"reply": "⚠️ Image generation failed. Please try again later."}
 
-    # Code requests
+    # --- Code Request ---
     if is_code_request(prompt):
         code_reply = await openai_chat(prompt, "gpt-4o", sys_prompt) \
             or await openrouter_chat(prompt, "gpt-4o-mini", sys_prompt)
-        return {"reply": code_reply or "⚠️ Code generation failed."}
+        return {"reply": code_reply or "⚠️ Code generation failed.", "is_code": True}
 
-    # Text routes by tier
+    # --- Tier Routing ---
     chains = {
         "Basic": [("GPT-4o-mini", "gpt-4o-mini"), ("Local", "local")],
         "Core": [("GPT-4o-mini", "gpt-4o-mini"), ("OpenRouter", "openrouter")],
@@ -848,6 +850,7 @@ async def route_ai_call(tier: str, prompt: str) -> Dict[str, Any]:
         "Founder": [("GPT-5", "gpt-5"), ("GPT-4o", "gpt-4o"), ("OpenRouter", "openrouter")],
     }
 
+    # --- Try available models per tier ---
     for label, model in chains.get(tier, [("GPT-4o-mini", "gpt-4o-mini")]):
         try:
             if model == "local":
@@ -856,13 +859,17 @@ async def route_ai_call(tier: str, prompt: str) -> Dict[str, Any]:
                 res = await openai_chat(prompt, model, sys_prompt)
             else:
                 res = await openrouter_chat(prompt, model, sys_prompt)
+
             if res:
                 print(f"[DEBUG] {tier} → {label} used")
-                return {"reply": res}
+                return {"reply": res, "tier": tier}
+
         except Exception as e:
             log_suspicious("RouteError", f"{label}: {str(e)}")
 
-    return {"reply": f"⚠️ No response available for now.\n> {prompt}"}
+    # --- Fallback ---
+    return {"reply": f"⚠️ No response available for now.\n> {prompt}", "tier": tier}
+
 
 
 
@@ -1258,19 +1265,24 @@ def chat():
                 session["founder_seq"] = 0
 
     # --- AI Router ---
-    if reply is None:
-        try:
-            raw_reply = route_ai_call(tier, user_msg)
-            # ✅ Trust system prompt formatting, just polish with auto_paragraph for safety
-            reply = auto_paragraph(raw_reply)
-        except Exception as e:
-            log_suspicious("LLMError", str(e))
-            reply = f"""⚠️ **System Error**
+if reply is None:
+    try:
+        # Because route_ai_call is async, we run it in an event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        raw_result = loop.run_until_complete(route_ai_call(tier, user_msg))
+
+        # raw_result is a dict like {"reply": "...", "image_url": "...", ...}
+        reply = auto_paragraph(raw_result.get("reply", "⚠️ No reply"))
+    except Exception as e:
+        log_suspicious("LLMError", str(e))
+        reply = f"""⚠️ **System Error**
 
 • I wasn’t able to process your request.  
 • Input received:  
 
 > {user_msg}"""
+
 
     # --- Save chat ---
     try:
@@ -2479,6 +2491,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
