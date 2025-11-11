@@ -1215,44 +1215,28 @@ def index():
         referrals_used=referrals_used
     )
 
-# ---------- CHAT ROUTE + FORMATTERS (drop into your app.py) ----------
+# ---------- CHAT ROUTE + FORMATTERS (Flask Safe Version) ----------
 import re
 import sqlite3
 import os
 from flask import request, session, jsonify
 
+# --- Helper Formatter ---
 def auto_paragraph(text: str) -> str:
-    """
-    Force replies into readable Markdown paragraphs while preserving:
-    - fenced code blocks (```...```)
-    - existing list-lines that start with -, *, • or digit.
-    - headers (# ...) and quotes (> ...)
-    Splits into sentences and creates clean paragraphs.
-    """
     if not text:
         return ""
-
     text = text.replace("\r\n", "\n")
-
-    # Split out fenced code blocks
     parts = re.split(r'(```[\s\S]*?```)', text, flags=re.MULTILINE)
     out_parts = []
-
     for idx, part in enumerate(parts):
-        if idx % 2 == 1:  # code block
+        if idx % 2 == 1:
             out_parts.append(part.strip())
             continue
-
-        # Split into blocks by blank lines
         segments = [seg.strip() for seg in re.split(r'\n\s*\n', part) if seg.strip()]
         for seg in segments:
-            # Preserve lists, headers, quotes as-is
-            if re.search(r'^\s*([-*•]|\d+\.)\s+', seg, flags=re.MULTILINE) \
-               or re.match(r'^\s*(#+\s|> )', seg):
+            if re.search(r'^\s*([-*•]|\d+\.)\s+', seg, flags=re.MULTILINE) or re.match(r'^\s*(#+\s|> )', seg):
                 out_parts.append(seg)
                 continue
-
-            # Split into sentences
             sentences = re.split(r'(?<=[.!?])\s+', seg)
             for s in sentences:
                 s = s.strip()
@@ -1260,16 +1244,19 @@ def auto_paragraph(text: str) -> str:
                     continue
                 s = s.replace('\n', ' ')
                 out_parts.append(s)
+    return '\n\n'.join(out_parts).strip()
 
-    # Join paragraphs with blank lines
-    result = '\n\n'.join([p for p in out_parts if p]).strip()
-    return result
+# --- Temporary AI Mock Helpers ---
+def UserCore(prompt, tier): return f"[UserCore] {prompt}"
+def LogicCore(prompt, tier): return f"[LogicCore] {prompt}"
+def CodeCore(prompt, tier): return f"[CodeCore] {prompt}"
+def WebCore(prompt, tier): return f"[WebCore] {prompt}"
+def ImageCore(prompt, tier): return f"[ImageCore] {prompt}"
+def SystemCore(prompt): return f"[System Summary] {prompt}"
 
-
-# ---------- CHAT ROUTE (EV-Main + Long & Global Memory + Helpers Integration) ----------
-# ---------- CHAT ROUTE (EV-Main + Long & Global Memory + Helpers Integration) ----------
+# --- Chat Route ---
 @app.route("/chat", methods=["POST"])
-async def chat():
+def chat():
     """Main EVOSGPT chat route with guest handling, tier routing, memory recall, and AI helper delegation."""
     try:
         data = request.get_json(silent=True) or {}
@@ -1279,12 +1266,10 @@ async def chat():
         reply = None
         guest_id = None
 
-        # --- Guest Mode (limit chat count) ---
+        # --- Guest Mode ---
         if "user_id" not in session:
             if "guest_id" not in session:
                 token = os.urandom(16).hex()
-                async with aiofiles.open("database/memory.db", "a"):  # ensure db file exists
-                    pass
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
                 c.execute("INSERT INTO guests (session_token) VALUES (?)", (token,))
@@ -1302,7 +1287,7 @@ async def chat():
             if session["guest_count"] == 4:
                 return jsonify({"reply": "⚠ You have 1 free chat left. Please register or log in to continue."})
 
-        # --- Founder Unlock Sequence ---
+        # --- Founder Unlock ---
         if "user_id" in session:
             seq = session.get("founder_seq", 0)
             if seq == 0 and ui == "evosgpt where you created":
@@ -1332,7 +1317,7 @@ async def chat():
             elif seq > 0:
                 session["founder_seq"] = 0
 
-        # --- Memory Recall (long/global) ---
+        # --- Memory Recall ---
         long_summary, global_context = "", ""
         try:
             conn = sqlite3.connect("database/memory.db")
@@ -1360,17 +1345,16 @@ async def chat():
                     memory_prefix += f"[Global Context]: {global_context}\n"
                 prompt = f"{memory_prefix}{user_msg}"
 
-                # Contextual helper routing
                 if any(k in ui for k in ["python", "code", "script", "program", "api", "algorithm"]):
-                    raw_reply = await CodeCore(prompt, tier)
+                    raw_reply = CodeCore(prompt, tier)
                 elif any(k in ui for k in ["image", "draw", "diagram", "chart", "generate picture"]):
-                    raw_reply = await ImageCore(prompt, tier)
+                    raw_reply = ImageCore(prompt, tier)
                 elif any(k in ui for k in ["analyze", "explain", "summarize", "translate", "logic", "reasoning"]):
-                    raw_reply = await LogicCore(prompt, tier)
+                    raw_reply = LogicCore(prompt, tier)
                 elif any(k in ui for k in ["search", "latest", "news", "lookup", "find"]):
-                    raw_reply = await WebCore(prompt, tier)
+                    raw_reply = WebCore(prompt, tier)
                 else:
-                    raw_reply = await UserCore(prompt, tier)
+                    raw_reply = UserCore(prompt, tier)
 
                 reply = auto_paragraph(raw_reply)
 
@@ -1378,7 +1362,7 @@ async def chat():
                 log_suspicious("LLMRouteFail", str(e))
                 reply = f"⚠️ AI Processing Error.\n> {user_msg}"
 
-        # --- Store chat to memory ---
+        # --- Store Memory ---
         try:
             conn = sqlite3.connect("database/memory.db")
             c = conn.cursor()
@@ -1396,7 +1380,7 @@ async def chat():
         except Exception as e:
             log_suspicious("ChatInsertFail", str(e))
 
-        # --- Auto Summarize into long_memory (every 10 chats) ---
+        # --- Summarization ---
         try:
             if "user_id" in session:
                 uid = session["user_id"]
@@ -1409,7 +1393,7 @@ async def chat():
                     rows = c.fetchall()
                     convo = "\n".join([f"User: {u}\nAI: {b}" for u, b in rows])
                     summary_prompt = f"Summarize this conversation in 1-2 sentences:\n{convo}"
-                    summary = await SystemCore(summary_prompt)
+                    summary = SystemCore(summary_prompt)
                     c.execute("""
                         INSERT INTO long_memory (user_id, summary, last_updated)
                         VALUES (?, ?, CURRENT_TIMESTAMP)
@@ -1425,7 +1409,6 @@ async def chat():
     except Exception as main_e:
         log_suspicious("ChatRouteFail", str(main_e))
         return jsonify({"reply": "⚠️ Internal chat route error.", "tier": "Basic"})
-
 
 
 @app.route("/chat/result", methods=["GET"])
@@ -2605,6 +2588,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
