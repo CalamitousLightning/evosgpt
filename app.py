@@ -2144,18 +2144,7 @@ def upgrade():
         msg=msg
     )
 
-        # ---------- Normal upgrade ----------
-        if tier not in VALID_TIERS:
-            conn.close()
-            flash("⚠️ Invalid tier selected.")
-            return redirect(url_for("upgrade"))
 
-        # Save pending purchase for audit
-        ref = f"EVOS-{user_id}-{int(time.time())}"
-        c.execute("INSERT INTO purchases (user_id, tier, payment_method, reference) VALUES (?, ?, ?, ?)",
-                  (user_id, tier, payment_method, ref))
-        conn.commit()
-        conn.close()
 
         # ---------- PAYSTACK ----------
         if payment_method == "Paystack":
@@ -2644,6 +2633,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
