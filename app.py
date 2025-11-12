@@ -2077,29 +2077,26 @@ def upgrade():
     conn = sqlite3.connect("database/memory.db")
     c = conn.cursor()
 
+    # 🔹 Get user current tier
     user_id = session["user_id"]
     c.execute("SELECT tier FROM users WHERE id = ?", (user_id,))
     user_row = c.fetchone()
     current_tier = user_row[0] if user_row else "Basic"
 
-    # ---------- Tier filtering ----------
+    # 🔹 Filter: show only tiers above the user’s current tier
     all_tiers = ["Basic", "Core", "Pro", "King"]
     if current_tier in all_tiers:
         current_index = all_tiers.index(current_tier)
         available_upgrades = all_tiers[current_index + 1:]
     else:
-        available_upgrades = all_tiers  # fallback in case of bad data
+        available_upgrades = all_tiers  # fallback in case of invalid tier
 
-    prices = {"Core": 1, "Pro": 5, "King": 9}
-    currency = "USD"
-
-    # ---------- Handle form submission ----------
     if request.method == "POST":
         tier = request.form.get("tier")
         payment_method = request.form.get("payment_method")
         coupon = (request.form.get("coupon") or "").strip().upper()
 
-        # --- Coupon Handling ---
+        # ---------- Coupon handling ----------
         if coupon:
             c.execute("SELECT tier, used FROM coupons WHERE code = ?", (coupon,))
             row = c.fetchone()
@@ -2118,32 +2115,22 @@ def upgrade():
                 flash("⚠️ Invalid or already used coupon.")
                 return redirect(url_for("upgrade"))
 
-        # --- Tier upgrade (non-coupon) ---
-        if tier not in available_upgrades:
+    conn.close()
+    return render_template("upgrade.html", available_upgrades=available_upgrades)
+
+
+        # ---------- Normal upgrade ----------
+        if tier not in VALID_TIERS:
             conn.close()
-            flash("⚠️ You can only upgrade to a higher tier.")
+            flash("⚠️ Invalid tier selected.")
             return redirect(url_for("upgrade"))
 
-        # Example placeholder for actual payment process
-        flash(f"✅ Upgrade to {tier} selected via {payment_method}. Proceeding to payment...")
+        # Save pending purchase for audit
+        ref = f"EVOS-{user_id}-{int(time.time())}"
+        c.execute("INSERT INTO purchases (user_id, tier, payment_method, reference) VALUES (?, ?, ?, ?)",
+                  (user_id, tier, payment_method, ref))
+        conn.commit()
         conn.close()
-        return redirect(url_for("index"))  # You can replace with payment redirect
-
-    # ---------- If GET request ----------
-    conn.close()
-    if not available_upgrades:
-        msg = "👑 You’re already at the highest tier! No upgrades available."
-    else:
-        msg = None
-
-    return render_template(
-        "upgrade.html",
-        prices=prices,
-        currency=currency,
-        available_upgrades=available_upgrades,
-        msg=msg
-    )
-
 
 
         # ---------- PAYSTACK ----------
@@ -2633,6 +2620,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
