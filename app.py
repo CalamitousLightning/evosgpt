@@ -2328,8 +2328,8 @@ def bank_transfer():
         "account_name": "EVOSGPT LTD",
         "account_number": "024",
         "branch": "Berekum",
-        "note": "After transfer, upload proof or email evoarchitect00@gmail.com or support@evosgpt.com with your reference."
-        "Advice": "Use Paystack for a seamless transaction"
+        "note": "After transfer, upload proof or email evoarchitect00@gmail.com or support@evosgpt.com with your reference",
+        "advice": "Use paystack, upgrade for a seamless transaction."
     }
     return render_template("bank_transfer.html", bank=bank_details, tiers=list(TIER_PRICE_USD.keys()))
 
@@ -2602,6 +2602,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
