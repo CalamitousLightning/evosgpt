@@ -2128,8 +2128,7 @@ def upgrade():
         conn.commit()
         conn.close()
 
-    return render_template("upgrade.html", available_upgrades=available_upgrades)
-
+  
 
         # ---------- PAYSTACK ----------
         if payment_method == "Paystack":
@@ -2618,6 +2617,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
