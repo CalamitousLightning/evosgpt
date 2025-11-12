@@ -2067,6 +2067,7 @@ EXCHANGE_RATES = {
 PAYSTACK_ACCOUNT_CURRENCY = "GHS"
 
 
+
 @app.route("/upgrade", methods=["GET", "POST"])
 def upgrade():
     """Handles tier upgrades via Paystack, Coinbase Commerce, or Bank transfer."""
@@ -2077,21 +2078,8 @@ def upgrade():
     conn = sqlite3.connect("database/memory.db")
     c = conn.cursor()
 
-    # 🔹 Get user's current tier
-    user_id = session["user_id"]
-    c.execute("SELECT tier FROM users WHERE id = ?", (user_id,))
-    row = c.fetchone()
-    current_tier = row[0] if row else "Basic"
-
-    # 🔹 Show only tiers above user's current tier
-    all_tiers = ["Basic", "Core", "Pro", "King"]
-    if current_tier in all_tiers:
-        current_index = all_tiers.index(current_tier)
-        available_upgrades = all_tiers[current_index + 1:]
-    else:
-        available_upgrades = all_tiers
-
     if request.method == "POST":
+        user_id = session["user_id"]
         tier = request.form.get("tier")
         payment_method = request.form.get("payment_method")
         coupon = (request.form.get("coupon") or "").strip().upper()
@@ -2128,7 +2116,8 @@ def upgrade():
         conn.commit()
         conn.close()
 
-  
+
+ 
 
         # ---------- PAYSTACK ----------
         if payment_method == "Paystack":
@@ -2617,6 +2606,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
