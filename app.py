@@ -2006,6 +2006,39 @@ def logout():
     flash("You have been logged out.")
     return redirect(url_for("login"))
 
+@app.route("/get_referral")
+def get_referral():
+    """Return or generate the user's referral link for evosgpt.xyz"""
+    try:
+        if "user_id" in session:
+            uid = session["user_id"]
+            conn = sqlite3.connect("database/memory.db")
+            c = conn.cursor()
+
+            # Fetch existing referral code
+            c.execute("SELECT referral_code FROM users WHERE id = ?", (uid,))
+            result = c.fetchone()
+
+            if result and result[0]:
+                ref_code = result[0]
+            else:
+                # Generate referral code only once if missing
+                ref_code = "REF-" + os.urandom(3).hex().upper()
+                c.execute("UPDATE users SET referral_code = ? WHERE id = ?", (ref_code, uid))
+                conn.commit()
+
+            # Create full referral link for evosgpt.xyz
+            link = f"https://evosgpt.xyz/register?ref={ref_code}"
+
+            conn.close()
+            return jsonify({"link": link})
+
+        # --- Guest fallback ---
+        return jsonify({"link": "https://evosgpt.xyz/register"})
+
+    except Exception as e:
+        log_suspicious("ReferralGenError", str(e))
+        return jsonify({"link": "https://evosgpt.xyz/register"})
 
 
 # ---------- UPGRADE ROUTE (Paystack + Coinbase + Bank) ----------
@@ -2291,11 +2324,12 @@ def bank_transfer():
         return redirect(url_for("index"))
 
     bank_details = {
-        "bank_name": "ECOBANK GHANA",
+        "bank_name": "ABSA BANK GHANA",
         "account_name": "EVOSGPT LTD",
-        "account_number": "1234567890",
+        "account_number": "024",
         "branch": "Berekum",
-        "note": "After transfer, upload proof or email support@evosgpt.com with your reference."
+        "note": "After transfer, upload proof or email evoarchitect00@gmail.com or support@evosgpt.com with your reference."
+        "Advice": "Use Paystack for a seamless transaction"
     }
     return render_template("bank_transfer.html", bank=bank_details, tiers=list(TIER_PRICE_USD.keys()))
 
@@ -2568,6 +2602,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
