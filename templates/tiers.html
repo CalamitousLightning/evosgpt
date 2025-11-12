@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EvosGPT Tiers</title>
+  <style>
+    body {
+      font-family: "Poppins", sans-serif;
+      background: #0a0a0a;
+      color: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      text-align: center;
+      padding: 40px 20px;
+      background: linear-gradient(90deg, #2b1055, #7597de);
+    }
+    h1 {
+      font-size: 2.4rem;
+      margin-bottom: 0;
+    }
+    p.subtitle {
+      font-size: 1.1rem;
+      color: #dcdcdc;
+    }
+    .tier-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+      padding: 40px;
+    }
+    .tier-card {
+      background: #111;
+      border-radius: 12px;
+      padding: 25px;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
+      border: 1px solid #222;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .tier-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 0 25px rgba(117, 151, 222, 0.2);
+    }
+    .tier-name {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #7db4ff;
+    }
+    .memory {
+      color: #ccc;
+      margin-bottom: 10px;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    ul li::before {
+      content: "• ";
+      color: #7db4ff;
+    }
+    ul li {
+      margin-bottom: 6px;
+      color: #eee;
+    }
+    .ghana-section {
+      text-align: center;
+      padding: 50px 20px;
+      background: #0d0d0d;
+      border-top: 1px solid #222;
+    }
+    .ghana-section img {
+      width: 260px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .ghana-section a {
+      display: inline-block;
+      background: #7597de;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: 0.3s;
+    }
+    .ghana-section a:hover {
+      background: #567cc4;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EvosGPT Membership Tiers</h1>
+    <p class="subtitle">Choose a tier that matches your workflow and memory needs.</p>
+  </header>
+
+  <section class="tier-container">
+    <div class="tier-card">
+      <div class="tier-name">Basic</div>
+      <div class="memory">🧠 Memory Limit: 30 chats</div>
+      <ul>
+        <li>For light users and beginners</li>
+        <li>Good for Q&A, summaries, and daily tasks</li>
+        <li>Limited memory for short sessions</li>
+      </ul>
+    </div>
+
+    <div class="tier-card">
+      <div class="tier-name">Core</div>
+      <div class="memory">🧠 Memory Limit: 100 chats</div>
+      <ul>
+        <li>For regular users and students</li>
+        <li>Handles projects and research comfortably</li>
+        <li>Moderate session depth</li>
+      </ul>
+    </div>
+
+    <div class="tier-card">
+      <div class="tier-name">Pro</div>
+      <div class="memory">🧠 Memory Limit: 500 chats</div>
+      <ul>
+        <li>For creators, coders, and small teams</li>
+        <li>Handles large ongoing work sessions</li>
+        <li>Ideal for coding, writing, or AI testing</li>
+      </ul>
+    </div>
+
+    <div class="tier-card">
+      <div class="tier-name">King</div>
+      <div class="memory">🧠 Memory Limit: 1000 chats</div>
+      <ul>
+        <li>For heavy users and professionals</li>
+        <li>Persistent long-term memory sessions</li>
+        <li>Perfect for research, design, and deep work</li>
+      </ul>
+    </div>
+
+    <div class="tier-card">
+      <div class="tier-name">Founder</div>
+      <div class="memory">🧠 Memory Limit: Unlimited</div>
+      <ul>
+        <li>Exclusive tier with lifetime perks</li>
+        <li>Priority access to new features</li>
+        <li>Direct influence on EvosGPT development</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="ghana-section">
+    <h2>💳 For Users in Ghana</h2>
+    <p>If you’re in Ghana and need data bundles to access EvosGPT smoothly, click below to purchase.</p>
+    <img src="https://i.ibb.co/3syPKwK/mtn-momo.jpg" alt="MTN Mobile Money">
+    <p>After your transaction, send your payment details to any of these numbers via WhatsApp:</p>
+    <p><strong>0507 666 623</strong> or <strong>0541 111 205</strong></p>
+    <a href="https://mtn.com.gh/momo" target="_blank">🔗 Click here to buy data</a>
+  </section>
+</body>
+</html>
