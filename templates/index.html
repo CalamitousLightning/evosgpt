@@ -99,8 +99,6 @@
     .user { background: var(--chat-user-bg); color: var(--chat-user-text); align-self: flex-end; border-bottom-right-radius: 0; }
     .bot { background: var(--chat-bot-bg); color: var(--chat-bot-text); align-self: flex-start; border: 1px solid var(--border-color); border-bottom-left-radius: 0; }
 
-    .copy-btn { position: absolute; right: 10px; bottom: 8px; background: transparent; border: none; cursor: pointer; color: var(--primary-color); font-size: 13px; }
-
     #chat-form {
       display: flex;
       align-items: flex-end;
@@ -225,8 +223,7 @@
   </form>
 
   <script>
-    /* --- Sidebar + Chat code stays unchanged --- */
-
+    // Tiers popup with correct prices (USD to GHS at 1:15)
     function showTiersPopup() {
       const popup = document.createElement("div");
       popup.className = "popup";
@@ -243,29 +240,29 @@
 
           <div class="tier">
             <h3>Core</h3>
-            <p>Enhanced accuracy, faster speed, and early access to features.</p>
-            <p><strong>Price:</strong> GHS 50 / $5</p>
+            <p>Enhanced accuracy, faster response, and early feature access.</p>
+            <p><strong>Price:</strong> GHS 15 / $1</p>
             <button onclick="location.href='/upgrade?tier=Pro'">Upgrade to Pro</button>
           </div>
 
           <div class="tier">
             <h3>Pro</h3>
-            <p>Power user tier — unlocks analytics, extended tokens, and priority replies.</p>
-            <p><strong>Price:</strong> GHS 150 / $15</p>
+            <p>Power user tier — unlock analytics, longer chats, and priority replies.</p>
+            <p><strong>Price:</strong> GHS 75 / $5</p>
             <button onclick="location.href='/upgrade?tier=King'">Upgrade to King</button>
           </div>
 
           <div class="tier">
             <h3>King</h3>
-            <p>Exclusive tier with full AI customization, private access, and early Alpha tools.</p>
-            <p><strong>Price:</strong> GHS 350 / $35</p>
+            <p>Full AI customization, alpha access, and exclusive tools.</p>
+            <p><strong>Price:</strong> GHS 135 / $9</p>
             <button onclick="location.href='/upgrade?tier=Founder'">Upgrade to Founder</button>
           </div>
 
           <div class="tier">
             <h3>Founder 👑</h3>
-            <p>The highest and permanent tier. Includes private EVOSGPT instance, lifetime benefits, and direct network access.</p>
-            <p><strong>Price:</strong> GHS 1000 / $100 (One-time)</p>
+            <p>Permanent tier — lifetime EVOSGPT access, private instance, and early innovations.</p>
+            <p><strong>Price:</strong> GHS 1500 / $100</p>
             <button disabled>You're at the Top</button>
           </div>
 
