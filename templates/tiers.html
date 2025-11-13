@@ -38,6 +38,7 @@
       box-shadow: 0 0 15px rgba(255, 255, 255, 0.05);
       border: 1px solid #222;
       transition: transform 0.3s ease, box-shadow 0.3s ease;
+      text-align: center;
     }
     .tier-card:hover {
       transform: translateY(-5px);
@@ -56,6 +57,8 @@
     ul {
       list-style: none;
       padding: 0;
+      text-align: left;
+      display: inline-block;
     }
     ul li::before {
       content: "• ";
@@ -64,6 +67,20 @@
     ul li {
       margin-bottom: 6px;
       color: #eee;
+    }
+    .upgrade-btn {
+      background: #7597de;
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-top: 12px;
+      font-size: 0.95rem;
+      transition: background 0.3s;
+    }
+    .upgrade-btn:hover {
+      background: #567cc4;
     }
     .ghana-section {
       text-align: center;
@@ -97,55 +114,21 @@
   </header>
 
   <section class="tier-container">
+    {% for tier, info in tiers.items() %}
     <div class="tier-card">
-      <div class="tier-name">Basic</div>
-      <div class="memory">🧠 Memory Limit: 30 chats</div>
+      <div class="tier-name">{{ tier }}</div>
+      <div class="memory">🧠 Memory Limit: {{ info.memory }}</div>
       <ul>
-        <li>For light users and beginners</li>
-        <li>Good for Q&A, summaries, and daily tasks</li>
-        <li>Limited memory for short sessions</li>
+        {% for feature in info.features %}
+          <li>{{ feature }}</li>
+        {% endfor %}
       </ul>
+      <form action="{{ url_for('upgrade') }}" method="get">
+          <input type="hidden" name="tier" value="{{ tier }}">
+          <button class="upgrade-btn">Upgrade to {{ tier }}</button>
+      </form>
     </div>
-
-    <div class="tier-card">
-      <div class="tier-name">Core</div>
-      <div class="memory">🧠 Memory Limit: 100 chats</div>
-      <ul>
-        <li>For regular users and students</li>
-        <li>Handles projects and research comfortably</li>
-        <li>Moderate session depth</li>
-      </ul>
-    </div>
-
-    <div class="tier-card">
-      <div class="tier-name">Pro</div>
-      <div class="memory">🧠 Memory Limit: 500 chats</div>
-      <ul>
-        <li>For creators, coders, and small teams</li>
-        <li>Handles large ongoing work sessions</li>
-        <li>Ideal for coding, writing, or AI testing</li>
-      </ul>
-    </div>
-
-    <div class="tier-card">
-      <div class="tier-name">King</div>
-      <div class="memory">🧠 Memory Limit: 1000 chats</div>
-      <ul>
-        <li>For heavy users and professionals</li>
-        <li>Persistent long-term memory sessions</li>
-        <li>Perfect for research, design, and deep work</li>
-      </ul>
-    </div>
-
-    <div class="tier-card">
-      <div class="tier-name">Founder</div>
-      <div class="memory">🧠 Memory Limit: Unlimited</div>
-      <ul>
-        <li>Exclusive tier with lifetime perks</li>
-        <li>Priority access to new features</li>
-        <li>Direct influence on EvosGPT development</li>
-      </ul>
-    </div>
+    {% endfor %}
   </section>
 
   <section class="ghana-section">
