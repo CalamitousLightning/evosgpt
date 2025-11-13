@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Upgrade - EVOSGPT</title>
   <style>
     :root {
@@ -70,6 +70,7 @@
       margin-top: 20px;
       transition: 0.2s;
     }
+
     input[type=submit]:hover {
       background: #00bde0;
     }
@@ -93,9 +94,11 @@
     }
   </style>
 </head>
+
 <body>
   <div class="upgrade-box">
     <h2>Upgrade Your Plan</h2>
+
     <form method="POST">
       <label for="tier">Select Tier:</label>
       <select name="tier" id="tier" required>
@@ -106,13 +109,15 @@
 
       <label for="payment_method">Payment Method:</label>
       <select name="payment_method" id="payment_method" required>
-        <option value="Paystack">💳 Paystack</option>
+        <option value="Paystack">💳 Paystack (Card / MoMo)</option>
+        <option value="Coinbase">🪙 Coinbase (Crypto)</option>
+        <option value="Bank">🏦 Bank Transfer</option>
       </select>
 
       <label for="coupon">Coupon Code (optional):</label>
-      <input type="text" name="coupon" id="coupon" placeholder="Enter coupon code">
+      <input type="text" name="coupon" id="coupon" placeholder="Enter coupon code" />
 
-      <input type="submit" value="🚀 Upgrade Now">
+      <input type="submit" value="🚀 Upgrade Now" />
     </form>
 
     {% if msg %}
@@ -122,7 +127,7 @@
   </div>
 
   <script>
-    // Theme
+    // ✅ Auto theme detection
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) {
       document.body.setAttribute("data-theme", savedTheme);
@@ -130,18 +135,37 @@
       document.body.setAttribute("data-theme", "dark");
     }
 
-    // 🔹 Hide current and lower tiers
+    // ✅ Hide current and lower tiers
     const tiers = ["Basic", "Core", "Pro", "King"];
-    const currentTier = "{{ session.get('tier', 'Basic') }}"; // fetched from Flask session
+    const currentTier = "{{ session.get('tier', 'Basic') }}";
     const currentIndex = tiers.indexOf(currentTier);
-
     const select = document.getElementById("tier");
+
     [...select.options].forEach(opt => {
       const tierName = opt.getAttribute("data-tier");
       if (tiers.indexOf(tierName) <= currentIndex) {
         opt.style.display = "none";
       }
     });
+
+    // ✅ Auto-select tier if passed from ?tier= in URL
+    const params = new URLSearchParams(window.location.search);
+    const preselect = params.get("tier");
+    if (preselect) {
+      const target = [...select.options].find(o => o.value.toLowerCase() === preselect.toLowerCase());
+      if (target) target.selected = true;
+    }
+
+    // ✅ Auto-detect user currency via IP (optional)
+    fetch("https://ipapi.co/json/")
+      .then(res => res.json())
+      .then(data => {
+        const currency = data.currency || "{{ currency }}";
+        document.querySelectorAll("option[data-tier]").forEach(opt => {
+          opt.textContent = opt.textContent.replace("{{ currency }}", currency);
+        });
+      })
+      .catch(() => {});
   </script>
 </body>
 </html>
