@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upgrade - EVOSGPT</title>
   <style>
     :root {
@@ -96,40 +96,24 @@
 <body>
   <div class="upgrade-box">
     <h2>Upgrade Your Plan</h2>
+    <form method="POST">
+      <label for="tier">Select Tier:</label>
+      <select name="tier" id="tier" required>
+        <option value="Core" data-tier="Core">⚛ Core ({{ prices["Core"] }} {{ currency }})</option>
+        <option value="Pro" data-tier="Pro">⚡ Pro ({{ prices["Pro"] }} {{ currency }})</option>
+        <option value="King" data-tier="King">👑 King ({{ prices["King"] }} {{ currency }})</option>
+      </select>
 
-    {% if current_tier == "King" %}
-      <div class="msg">👑 You’ve reached the top. No upgrades available.<br><br>Bro, why the rush?</div>
-    {% elif current_tier == "Founder" %}
-      <div class="msg">🛡 Founder Mode Active — highest tier secured.</div>
-    {% else %}
-      <form method="POST">
-        <label for="tier">Select Tier:</label>
-        <select name="tier" id="tier" required>
-          {% if current_tier == "Basic" %}
-            <option value="Core">⚛ Core ({{ prices["Core"] }} {{ currency }})</option>
-            <option value="Pro">⚡ Pro ({{ prices["Pro"] }} {{ currency }})</option>
-            <option value="King">👑 King ({{ prices["King"] }} {{ currency }})</option>
-          {% elif current_tier == "Core" %}
-            <option value="Pro">⚡ Pro ({{ prices["Pro"] }} {{ currency }})</option>
-            <option value="King">👑 King ({{ prices["King"] }} {{ currency }})</option>
-          {% elif current_tier == "Pro" %}
-            <option value="King">👑 King ({{ prices["King"] }} {{ currency }})</option>
-          {% endif %}
-        </select>
+      <label for="payment_method">Payment Method:</label>
+      <select name="payment_method" id="payment_method" required>
+        <option value="Paystack">💳 Paystack</option>
+      </select>
 
-        <label for="payment_method">Payment Method:</label>
-        <select name="payment_method" id="payment_method" required>
-          <option value="Paystack">💳 Paystack (Card / MoMo)</option>
-          <option value="Coinbase">🪙 Coinbase (Crypto)</option>
-          <option value="Bank">🏦 Bank Transfer</option>
-        </select>
+      <label for="coupon">Coupon Code (optional):</label>
+      <input type="text" name="coupon" id="coupon" placeholder="Enter coupon code">
 
-        <label for="coupon">Coupon Code (optional):</label>
-        <input type="text" name="coupon" id="coupon" placeholder="Enter coupon code" />
-
-        <input type="submit" value="🚀 Upgrade Now" />
-      </form>
-    {% endif %}
+      <input type="submit" value="🚀 Upgrade Now">
+    </form>
 
     {% if msg %}
       <div class="msg">{{ msg }}</div>
@@ -138,7 +122,7 @@
   </div>
 
   <script>
-    // Auto theme detection
+    // Theme
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) {
       document.body.setAttribute("data-theme", savedTheme);
@@ -146,15 +130,18 @@
       document.body.setAttribute("data-theme", "dark");
     }
 
-    // Replace currency dynamically on client (optional)
-    fetch("https://ipapi.co/json/")
-      .then(res => res.json())
-      .then(data => {
-        const currency = data.currency || "USD";
-        document.querySelectorAll("option").forEach(opt => {
-          opt.textContent = opt.textContent.replace("{{ currency }}", currency);
-        });
-      });
+    // 🔹 Hide current and lower tiers
+    const tiers = ["Basic", "Core", "Pro", "King"];
+    const currentTier = "{{ session.get('tier', 'Basic') }}"; // fetched from Flask session
+    const currentIndex = tiers.indexOf(currentTier);
+
+    const select = document.getElementById("tier");
+    [...select.options].forEach(opt => {
+      const tierName = opt.getAttribute("data-tier");
+      if (tiers.indexOf(tierName) <= currentIndex) {
+        opt.style.display = "none";
+      }
+    });
   </script>
 </body>
 </html>
