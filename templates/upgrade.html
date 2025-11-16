@@ -226,16 +226,8 @@
       if (target) target.selected = true;
     }
 
-    /* ====================== CURRENCY ======================= */
-    fetch("https://ipapi.co/json/")
-      .then(res => res.json())
-      .then(data => {
-        const currency = data.currency || "{{ currency }}";
-        document.querySelectorAll("option[data-tier]").forEach(opt => {
-          opt.textContent = opt.textContent.replace("{{ currency }}", currency);
-        });
-      })
-      .catch(() => {});
+    /* ================== REMOVE BLOCKED CSP CODE ================== */
+    // Currency now fully handled by Flask backend.
 
     /* ====================== TIER INFO POPUP ======================= */
 
@@ -272,7 +264,9 @@
       const chosenTier = document.getElementById("tier").value;
       modalTitle.textContent = chosenTier + " Tier Benefits";
 
-      modalBenefits.innerHTML = benefitData[chosenTier].map(b => "<div>• " + b + "</div>").join("");
+      modalBenefits.innerHTML = benefitData[chosenTier]
+        .map(b => "<div>• " + b + "</div>")
+        .join("");
 
       modalBg.style.display = "flex";
     });
