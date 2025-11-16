@@ -92,6 +92,62 @@
       color: var(--primary-color);
       text-decoration: none;
     }
+
+    /* ---------- POPUP MODAL ---------- */
+
+    .modal-bg {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    .modal-box {
+      background: var(--card-bg);
+      padding: 25px;
+      width: 90%;
+      max-width: 420px;
+      border-radius: 12px;
+      color: var(--text-color);
+    }
+
+    .modal-title {
+      font-size: 20px;
+      color: var(--primary-color);
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .benefits {
+      margin-top: 10px;
+      padding: 10px;
+      background: rgba(0,212,255,0.08);
+      border-radius: 8px;
+    }
+
+    .confirm-btn {
+      width: 100%;
+      margin-top: 20px;
+      padding: 12px;
+      background: var(--primary-color);
+      border: none;
+      color: white;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .close-btn {
+      margin-top: 10px;
+      text-align: center;
+      cursor: pointer;
+      color: var(--primary-color);
+    }
   </style>
 </head>
 
@@ -99,7 +155,7 @@
   <div class="upgrade-box">
     <h2>Upgrade Your Plan</h2>
 
-    <form method="POST">
+    <form method="POST" id="upgradeForm">
       <label for="tier">Select Tier:</label>
       <select name="tier" id="tier" required>
         <option value="Core" data-tier="Core">⚛ Core ({{ prices["Core"] }} {{ currency }})</option>
@@ -117,7 +173,7 @@
       <label for="coupon">Coupon Code (optional):</label>
       <input type="text" name="coupon" id="coupon" placeholder="Enter coupon code" />
 
-      <input type="submit" value="🚀 Upgrade Now" />
+      <input type="submit" value="🚀 Upgrade Now" id="triggerModal" />
     </form>
 
     {% if msg %}
@@ -126,8 +182,22 @@
     <a href="/">← Back to Chat</a>
   </div>
 
+  <!-- ===================== TIER POPUP MODAL ===================== -->
+
+  <div class="modal-bg" id="modalBg">
+    <div class="modal-box">
+      <div class="modal-title" id="modalTitle"></div>
+
+      <div class="benefits" id="modalBenefits"></div>
+
+      <button class="confirm-btn" id="confirmUpgrade">Confirm Upgrade</button>
+
+      <div class="close-btn" id="closeModal">Cancel</div>
+    </div>
+  </div>
+
   <script>
-    // ✅ Auto theme detection
+    /* ======================= THEME ====================== */
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) {
       document.body.setAttribute("data-theme", savedTheme);
@@ -135,7 +205,7 @@
       document.body.setAttribute("data-theme", "dark");
     }
 
-    // ✅ Hide current and lower tiers
+    /* ==================== HIDE LOWER TIERS ==================== */
     const tiers = ["Basic", "Core", "Pro", "King"];
     const currentTier = "{{ session.get('tier', 'Basic') }}";
     const currentIndex = tiers.indexOf(currentTier);
@@ -148,7 +218,7 @@
       }
     });
 
-    // ✅ Auto-select tier if passed from ?tier= in URL
+    /* ====================== AUTO SELECT ======================= */
     const params = new URLSearchParams(window.location.search);
     const preselect = params.get("tier");
     if (preselect) {
@@ -156,7 +226,7 @@
       if (target) target.selected = true;
     }
 
-    // ✅ Auto-detect user currency via IP (optional)
+    /* ====================== CURRENCY ======================= */
     fetch("https://ipapi.co/json/")
       .then(res => res.json())
       .then(data => {
@@ -166,6 +236,55 @@
         });
       })
       .catch(() => {});
+
+    /* ====================== TIER INFO POPUP ======================= */
+
+    const modalBg = document.getElementById("modalBg");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalBenefits = document.getElementById("modalBenefits");
+    const confirmBtn = document.getElementById("confirmUpgrade");
+
+    const benefitData = {
+      "Core": [
+        "✔ Faster responses",
+        "✔ Longer context memory",
+        "✔ Priority uptime",
+        "✔ Basic analytics"
+      ],
+      "Pro": [
+        "✔ Everything in Core",
+        "✔ Ultra memory expansion",
+        "✔ Faster engines",
+        "✔ Advanced analytics"
+      ],
+      "King": [
+        "✔ Everything in Pro",
+        "✔ Maximum speed",
+        "✔ Unlimited memory",
+        "✔ Early access to new models",
+        "✔ King-level priority"
+      ]
+    };
+
+    document.getElementById("triggerModal").addEventListener("click", (e) => {
+      e.preventDefault();
+
+      const chosenTier = document.getElementById("tier").value;
+      modalTitle.textContent = chosenTier + " Tier Benefits";
+
+      modalBenefits.innerHTML = benefitData[chosenTier].map(b => "<div>• " + b + "</div>").join("");
+
+      modalBg.style.display = "flex";
+    });
+
+    document.getElementById("closeModal").addEventListener("click", () => {
+      modalBg.style.display = "none";
+    });
+
+    confirmBtn.addEventListener("click", () => {
+      document.getElementById("upgradeForm").submit();
+    });
   </script>
+
 </body>
 </html>
