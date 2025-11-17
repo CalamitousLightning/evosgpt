@@ -2256,15 +2256,26 @@ def create_coinbase_charge():
         flash("❌ Coinbase not configured.")
         return redirect(url_for("upgrade"))
 
+    # amount from your pricing dict
     amount_usd = float(TIER_PRICE_USD[tier])
     ref = f"EVOS-COIN-{session['user_id']}-{int(time.time())}"
 
     payload = {
-        "name": f"EVOSGPT - {tier}",
-        "description": f"Upgrade to {tier}",
-        "local_price": {"amount": f"{amount_usd:.2f}", "currency": "USD"},
+        "name": f"EVOSGPT Upgrade - {tier}",
+        "description": f"Upgrade your EVOSGPT tier to {tier}",
+        "local_price": {
+            "amount": f"{amount_usd:.2f}",
+            "currency": "USD"
+        },
         "pricing_type": "fixed_price",
-        "metadata": {"user_id": session["user_id"], "tier": tier, "reference": ref},
+
+        # Coinbase will return this EXACTLY in webhook payload.event.data.metadata
+        "metadata": {
+            "user_id": session["user_id"],
+            "tier": tier,
+            "reference": ref
+        },
+
         "redirect_url": url_for("upgrade_success", _external=True),
         "cancel_url": url_for("upgrade", _external=True)
     }
@@ -2275,36 +2286,53 @@ def create_coinbase_charge():
         "X-CC-Version": "2018-03-22"
     }
 
+    # ---- SEND CHARGE REQUEST ----
     try:
-        resp = requests.post("https://api.commerce.coinbase.com/charges",
-                             json=payload, headers=headers, timeout=15)
+        resp = requests.post(
+            "https://api.commerce.coinbase.com/charges",
+            json=payload,
+            headers=headers,
+            timeout=15
+        )
     except Exception as e:
         print("❌ Coinbase create charge network error:", e)
         flash("❌ Coinbase initialization failed (network).")
         return redirect(url_for("upgrade"))
 
     print("🔹 Coinbase direct charge response:", resp.status_code, resp.text)
+
+    # Ensure JSON parsing does not crash the flow
     try:
         rj = resp.json()
     except Exception:
         rj = {}
 
+    # ---- SUCCESS CASE ----
     if resp.ok and "data" in rj:
-        hosted_url = rj["data"].get("hosted_url")
+        data = rj["data"]
+        hosted_url = data.get("hosted_url")
+
         if hosted_url:
+            print("🔗 Redirecting user to Coinbase hosted charge:", hosted_url)
+
+            # Save pending purchase (optional but safe)
             try:
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
-                c.execute("INSERT INTO purchases (user_id, tier, payment_method, reference) VALUES (?, ?, ?, ?)",
-                          (session["user_id"], tier, "Coinbase", ref))
+                c.execute(
+                    "INSERT INTO purchases (user_id, tier, payment_method, reference) VALUES (?, ?, ?, ?)",
+                    (session["user_id"], tier, "Coinbase-Pending", ref)
+                )
                 conn.commit()
                 conn.close()
             except Exception as e:
                 print("⚠️ Coinbase save purchase error:", e)
+
             return redirect(hosted_url)
 
+    # ---- FAILURE CASE ----
     print("❌ Coinbase charge failed:", resp.status_code, resp.text)
-    flash("❌ Coinbase initialization failed. Check your API key or dashboard.")
+    flash("❌ Coinbase initialization failed. Check your API key or Coinbase dashboard.")
     return redirect(url_for("upgrade"))
 
 
@@ -2606,6 +2634,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
