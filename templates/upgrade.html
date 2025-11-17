@@ -37,7 +37,7 @@
       border-radius: 12px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
       width: 100%;
-      max-width: 480px;
+      max-width: 420px;
     }
 
     h2 {
@@ -52,17 +52,16 @@
       margin-top: 12px;
     }
 
-    select, input[type=text], input[type=submit] {
+    select, input[type=text], button[type=submit] {
       width: 100%;
       padding: 12px;
       margin-top: 8px;
       border-radius: 8px;
       border: 1px solid var(--border-color);
       font-size: 14px;
-      box-sizing: border-box;
     }
 
-    input[type=submit] {
+    button[type=submit] {
       background: var(--primary-color);
       color: white;
       font-weight: bold;
@@ -72,7 +71,9 @@
       transition: 0.2s;
     }
 
-    input[type=submit]:hover { background: #00bde0; }
+    button[type=submit]:hover {
+      background: #00bde0;
+    }
 
     .msg {
       margin-top: 15px;
@@ -84,9 +85,16 @@
       text-align: center;
     }
 
-    a { display: block; margin-top: 20px; text-align: center; color: var(--primary-color); text-decoration: none; }
+    a {
+      display: block;
+      margin-top: 20px;
+      text-align: center;
+      color: var(--primary-color);
+      text-decoration: none;
+    }
 
     /* ---------- POPUP MODAL ---------- */
+
     .modal-bg {
       display: none;
       position: fixed;
@@ -101,25 +109,30 @@
 
     .modal-box {
       background: var(--card-bg);
-      padding: 20px;
-      width: 92%;
-      max-width: 460px;
+      padding: 25px;
+      width: 90%;
+      max-width: 420px;
       border-radius: 12px;
       color: var(--text-color);
-      box-sizing: border-box;
     }
 
-    .modal-title { font-size: 20px; color: var(--primary-color); text-align: center; margin-bottom: 8px; }
-    .modal-sub { text-align: center; color: #666; margin-bottom: 12px; font-size: 13px; }
+    .modal-title {
+      font-size: 20px;
+      color: var(--primary-color);
+      text-align: center;
+      margin-bottom: 10px;
+    }
 
-    .benefits { margin-top: 10px; padding: 10px; background: rgba(0,212,255,0.08); border-radius: 8px; min-height: 64px; }
-    .benefits div { margin-bottom: 6px; }
-
-    .price-line { margin-top: 10px; font-weight: 700; text-align: center; color: var(--text-color); }
+    .benefits {
+      margin-top: 10px;
+      padding: 10px;
+      background: rgba(0,212,255,0.08);
+      border-radius: 8px;
+    }
 
     .confirm-btn {
       width: 100%;
-      margin-top: 16px;
+      margin-top: 20px;
       padding: 12px;
       background: var(--primary-color);
       border: none;
@@ -129,10 +142,11 @@
       cursor: pointer;
     }
 
-    .close-btn { margin-top: 10px; text-align: center; cursor: pointer; color: var(--primary-color); display:block; }
-
-    @media (max-width: 420px) {
-      .modal-box { padding: 14px; }
+    .close-btn {
+      margin-top: 10px;
+      text-align: center;
+      cursor: pointer;
+      color: var(--primary-color);
     }
   </style>
 </head>
@@ -141,14 +155,12 @@
   <div class="upgrade-box">
     <h2>Upgrade Your Plan</h2>
 
-    <!-- Note: action left blank so JS can set it depending on payment method -->
     <form method="POST" id="upgradeForm" action="/upgrade">
       <label for="tier">Select Tier:</label>
       <select name="tier" id="tier" required>
-        <!-- The server should render prices and currency variables -->
-        <option value="Core" data-tier="Core" data-price="{{ prices['Core'] }}">{{ "⚛ Core (" ~ prices['Core'] ~ " " ~ currency ~ ")" }}</option>
-        <option value="Pro" data-tier="Pro" data-price="{{ prices['Pro'] }}">{{ "⚡ Pro (" ~ prices['Pro'] ~ " " ~ currency ~ ")" }}</option>
-        <option value="King" data-tier="King" data-price="{{ prices['King'] }}">{{ "👑 King (" ~ prices['King'] ~ " " ~ currency ~ ")" }}</option>
+        <option value="Core" data-tier="Core">⚛ Core ({{ prices["Core"] }} {{ currency }})</option>
+        <option value="Pro" data-tier="Pro">⚡ Pro ({{ prices["Pro"] }} {{ currency }})</option>
+        <option value="King" data-tier="King">👑 King ({{ prices["King"] }} {{ currency }})</option>
       </select>
 
       <label for="payment_method">Payment Method:</label>
@@ -161,7 +173,7 @@
       <label for="coupon">Coupon Code (optional):</label>
       <input type="text" name="coupon" id="coupon" placeholder="Enter coupon code" />
 
-      <input type="submit" value="🚀 Upgrade Now" id="triggerModal" />
+      <button type="submit" id="triggerModal">🚀 Upgrade Now</button>
     </form>
 
     {% if msg %}
@@ -171,41 +183,42 @@
   </div>
 
   <!-- ===================== TIER POPUP MODAL ===================== -->
+
   <div class="modal-bg" id="modalBg">
-    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-box">
       <div class="modal-title" id="modalTitle"></div>
-      <div class="modal-sub" id="modalSub">Please confirm your selection and proceed to checkout.</div>
 
       <div class="benefits" id="modalBenefits"></div>
-      <div class="price-line" id="modalPrice"></div>
 
-      <button class="confirm-btn" id="confirmUpgrade">Confirm & Continue</button>
+      <button class="confirm-btn" id="confirmUpgrade">Confirm Upgrade</button>
+
       <div class="close-btn" id="closeModal">Cancel</div>
     </div>
   </div>
 
   <script>
-    /* THEME */
+    /* ======================= THEME ====================== */
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) {
       document.body.setAttribute("data-theme", savedTheme);
-    } else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
       document.body.setAttribute("data-theme", "dark");
     }
 
-    /* HIDE LOWER TIERS (client-only) */
-    const tiersOrder = ["Basic", "Core", "Pro", "King"];
+    /* ==================== HIDE LOWER TIERS ==================== */
+    const tiers = ["Basic", "Core", "Pro", "King"];
     const currentTier = "{{ session.get('tier', 'Basic') }}";
-    const currentIndex = Math.max(0, tiersOrder.indexOf(currentTier));
+    const currentIndex = tiers.indexOf(currentTier);
     const select = document.getElementById("tier");
+
     [...select.options].forEach(opt => {
       const tierName = opt.getAttribute("data-tier");
-      if (tiersOrder.indexOf(tierName) <= currentIndex) {
+      if (tiers.indexOf(tierName) <= currentIndex) {
         opt.style.display = "none";
       }
     });
 
-    /* PRESELECT from ?tier= if provided */
+    /* ====================== AUTO SELECT ======================= */
     const params = new URLSearchParams(window.location.search);
     const preselect = params.get("tier");
     if (preselect) {
@@ -213,80 +226,56 @@
       if (target) target.selected = true;
     }
 
-    /* TIER BENEFITS DATA (UI only) */
-    const benefitData = {
-      "Core": [
-        "Faster responses",
-        "Longer context memory",
-        "Priority uptime",
-        "Basic analytics"
-      ],
-      "Pro": [
-        "Everything in Core",
-        "Ultra memory expansion",
-        "Faster engines",
-        "Advanced analytics"
-      ],
-      "King": [
-        "Everything in Pro",
-        "Maximum speed",
-        "Unlimited memory",
-        "Early access to new models",
-        "King-level priority"
-      ]
-    };
+    /* ====================== TIER INFO POPUP ======================= */
 
     const modalBg = document.getElementById("modalBg");
     const modalTitle = document.getElementById("modalTitle");
     const modalBenefits = document.getElementById("modalBenefits");
-    const modalPrice = document.getElementById("modalPrice");
     const confirmBtn = document.getElementById("confirmUpgrade");
-    const closeBtn = document.getElementById("closeModal");
-    const form = document.getElementById("upgradeForm");
 
-    // When user clicks "Upgrade Now" button, open modal instead of submitting directly
+    const benefitData = {
+      "Core": [
+        "✔ Faster responses",
+        "✔ Longer context memory",
+        "✔ Priority uptime",
+        "✔ Basic analytics"
+      ],
+      "Pro": [
+        "✔ Everything in Core",
+        "✔ Ultra memory expansion",
+        "✔ Faster engines",
+        "✔ Advanced analytics"
+      ],
+      "King": [
+        "✔ Everything in Pro",
+        "✔ Maximum speed",
+        "✔ Unlimited memory",
+        "✔ Early access to new models",
+        "✔ King-level priority"
+      ]
+    };
+
     document.getElementById("triggerModal").addEventListener("click", (e) => {
       e.preventDefault();
 
-      const chosenTierOpt = select.options[select.selectedIndex];
-      const chosenTier = chosenTierOpt ? chosenTierOpt.getAttribute("data-tier") : select.value;
-      const price = chosenTierOpt ? chosenTierOpt.getAttribute("data-price") : "";
-      const currency = "{{ currency }}";
+      const chosenTier = document.getElementById("tier").value;
+      modalTitle.textContent = chosenTier + " Tier Benefits";
 
-      // Fill modal text
-      modalTitle.textContent = `${chosenTier} Tier Benefits`;
-      modalBenefits.innerHTML = (benefitData[chosenTier] || ["No special info available."]).map(b => `<div>• ${b}</div>`).join("");
-      modalPrice.textContent = price ? `Price: ${price} ${currency}` : "";
+      modalBenefits.innerHTML = benefitData[chosenTier]
+        .map(b => "<div>• " + b + "</div>")
+        .join("");
 
-      // Show modal
       modalBg.style.display = "flex";
     });
 
-    // Close modal
-    closeBtn.addEventListener("click", () => {
+    document.getElementById("closeModal").addEventListener("click", () => {
       modalBg.style.display = "none";
     });
 
-    // Confirm: set correct form action based on payment method, then submit normally
     confirmBtn.addEventListener("click", () => {
-      const pm = document.getElementById("payment_method").value;
-      // If coinbase: use your create_coinbase_charge POST route (backend already has create_coinbase_charge)
-      if (pm === "Coinbase") {
-        form.action = "/create_coinbase_charge";
-      } else {
-        // default path uses existing upgrade handler which handles Paystack & Bank
-        form.action = "/upgrade";
-      }
-      // submit the form normally so server-side redirects (302) will be followed by browser
-      form.submit();
-    });
-
-    // Accessibility: close modal on Escape
-    window.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape") {
-        if (modalBg.style.display === "flex") modalBg.style.display = "none";
-      }
+      document.getElementById("upgradeForm").submit();
     });
   </script>
+
 </body>
 </html>
