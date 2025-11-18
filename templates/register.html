@@ -1,122 +1,313 @@
-<!-- Modal -->
-<div id="termsModal" class="modal">
-  <div class="modal-content">
-    <span class="close" id="closeModal">&times;</span>
-    <h3>EVOSGPT Terms of Service, Privacy Policy & Refund Policy</h3>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register - EVOSGPT</title>
+  <style>
+    :root {
+      --bg-color: #f5f7fa;
+      --text-color: #333;
+      --primary-color: #00d4ff;
+      --card-bg: #fff;
+      --border-color: #ccc;
+      --accent: #ff9800;
+    }
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --text-color: #f5f5f5;
+      --card-bg: #1f1f1f;
+      --border-color: #333;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .form-box {
+      width: 100%;
+      max-width: 400px;
+      padding: 25px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+      position: relative;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: var(--primary-color);
+    }
+    input,
+    button {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      font-size: 14px;
+    }
+    input {
+      background: var(--card-bg);
+      color: var(--text-color);
+    }
+    button {
+      background: var(--primary-color);
+      color: #fff;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    button:hover {
+      background: #00bde0;
+    }
 
-    <h4 style="color:var(--primary-color);">1. Acceptance of Terms</h4>
-    <p>
-      By creating an EVOSGPT account, you agree to comply with all policies outlined in this document.
-      EVOSGPT reserves the right to update or modify these terms at any time.
-      Continued use of the service after changes constitutes acceptance.
-    </p>
+    .terms-box {
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .terms-box input {
+      width: auto;
+      margin-right: 6px;
+    }
+    .terms-box a {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline;
+    }
 
-    <h4 style="color:var(--primary-color);">2. General Usage</h4>
-    <p>
-      EVOSGPT is an AI platform designed for productivity, learning, creativity, and entertainment.
-      Users must not:
-    </p>
-    <ul>
-      <li>engage in illegal activities</li>
-      <li>use automated bots to abuse the system</li>
-      <li>attempt hacking, tampering, or reverse engineering</li>
-      <li>share harmful, abusive, or misleading content</li>
-    </ul>
+    .msg {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      text-align: center;
+    }
+    .msg.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+    .msg.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
 
-    <h4 style="color:var(--primary-color);">3. EVOSToken Policy</h4>
-    <p>
-      EVOSTokens are internal credits earned from chatting, referrals, bonuses, or promotions.
-      EVOSTokens:
-    </p>
-    <ul>
-      <li>have no real-world monetary value</li>
-      <li>cannot be withdrawn, traded, or sold</li>
-      <li>may be used for unlocking in-app features or upgrades</li>
-      <li>large redemptions may take 1–24 hours to process for verification</li>
-    </ul>
-    <p>
-      Any attempt to exploit or artificially generate tokens will result in suspension.
-    </p>
+    /* Modal Styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: var(--card-bg);
+      color: var(--text-color);
+      width: 92%;
+      max-width: 700px;
+      max-height: 80vh;
+      overflow-y: auto;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      position: relative;
+    }
+    .close {
+      position: absolute;
+      right: 15px;
+      top: 10px;
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--accent);
+    }
+    .modal h3 {
+      color: var(--primary-color);
+      margin-top: 0;
+    }
+    .section-title {
+      margin-top: 20px;
+      font-weight: bold;
+      color: var(--accent);
+    }
+    .agree-btn {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      padding: 12px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 10px;
+      width: 100%;
+    }
 
-    <h4 style="color:var(--primary-color);">4. Paid Tiers</h4>
-    <p>EVOSGPT offers the following paid memberships:</p>
-    <ul>
-      <li><strong>Core – $1</strong></li>
-      <li><strong>Pro – $5</strong></li>
-      <li><strong>King – $9</strong></li>
-    </ul>
-    <p>
-      All payments are processed securely through Paystack, Coinbase Commerce, or Bank Transfer.
-      Your tier upgrades instantly after successful payment confirmation.
-    </p>
+    footer {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 12px;
+      opacity: 0.7;
+    }
 
-    <h4 style="color:var(--primary-color);">5. Refund Policy</h4>
-    <p>
-      Refunds are offered only under the following circumstances:
-    </p>
-    <ul>
-      <li>Payment succeeded but your tier did not activate</li>
-      <li>Duplicate payments caused by a system error</li>
-      <li>Unauthorized transactions (requires proof)</li>
-    </ul>
-    <p>
-      Refunds are <strong>not available</strong> for:
-    </p>
-    <ul>
-      <li>changing your mind after upgrade</li>
-      <li>referrals or EVOSToken purchases</li>
-      <li>usage after the upgrade activation</li>
-    </ul>
+    .support {
+      text-align: center;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    .support a {
+      color: var(--accent);
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-box">
+    <h2>Create Account</h2>
 
-    <h4 style="color:var(--primary-color);">6. Referral System</h4>
-    <p>
-      When a user signs up using your referral link, you receive bonus EVOSTokens.
-      Fraudulent or self-referrals will result in:
-    </p>
-    <ul>
-      <li>removal of referral rewards</li>
-      <li>temporary or permanent suspension</li>
-    </ul>
+    <form method="POST" id="registerForm">
+      <input type="text" name="username" placeholder="Username" required />
+      <input type="text" name="email" placeholder="Email or Mobile" required />
+      <input type="password" name="password" placeholder="Password" required />
+      <input type="password" name="confirm_password" placeholder="Confirm Password" required />
+      <input type="text" name="referral_code" placeholder="Referral Code (optional)" />
 
-    <h4 style="color:var(--primary-color);">7. Privacy Policy</h4>
-    <p>
-      EVOSGPT collects minimal data necessary for account creation and usage tracking.
-      We may store:
-    </p>
-    <ul>
-      <li>username</li>
-      <li>email or mobile number</li>
-      <li>chat logs (for model improvement, fully anonymized)</li>
-      <li>tier and payment history</li>
-    </ul>
-    <p>
-      We <strong>do not</strong> sell user data. We do not share personal information with third parties.
-      Data is encrypted and protected using industry-standard security.
-    </p>
+      <div class="terms-box">
+        <input type="checkbox" id="agree_terms" name="agree_terms" />
+        <label for="agree_terms">
+          I agree to the <a id="openTerms">Terms</a>, <a id="openPrivacy">Privacy</a>, & <a id="openRefund">Refund Policy</a>
+        </label>
+      </div>
 
-    <h4 style="color:var(--primary-color);">8. Account Security</h4>
-    <p>
-      You are responsible for keeping your password safe.
-      EVOSGPT is not responsible for losses due to weak passwords or account sharing.
-    </p>
+      <button type="submit">Register</button>
+    </form>
 
-    <h4 style="color:var(--primary-color);">9. Service Availability</h4>
-    <p>
-      EVOSGPT may experience occasional downtime for maintenance, feature upgrades, or security improvements.
-      We do not guarantee 24/7 uptime, but we strive for stability.
-    </p>
+    {% if msg %}
+    <div class="msg {{ msg_type }}">{{ msg }}</div>
+    {% endif %}
+    <p>Already have an account? <a href="/login">Login here</a></p>
 
-    <h4 style="color:var(--primary-color);">10. Consent</h4>
-    <p>
-      By clicking "I Agree", you confirm that you have read, understood, and accepted the:
-    </p>
-    <ul>
-      <li>Terms of Service</li>
-      <li>Privacy Policy</li>
-      <li>Refund Policy</li>
-      <li>EVOSToken Rules</li>
-    </ul>
+    <div class="support">
+      Support: <a href="mailto:support@evosgpt.xyz">support@evosgpt.xyz</a>
+    </div>
 
-    <button class="agree-btn" id="agreeClose">Agree & Close</button>
+    <footer>© 2025 EVOSGPT. All Rights Reserved.</footer>
   </div>
-</div>
+
+  <!-- Modal -->
+  <div id="termsModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeModal">&times;</span>
+
+      <h3>EVOSGPT — Terms of Service</h3>
+
+      <p class="section-title">1. Use of Platform</p>
+      <p>By creating an account, you agree to use EVOSGPT responsibly, without abuse, harassment, illegal activity, or system exploitation.</p>
+
+      <p class="section-title">2. User Accounts</p>
+      <p>You must provide accurate information. Multiple fraudulent accounts may result in suspension.</p>
+
+      <p class="section-title">3. AI Output</p>
+      <p>EVOSGPT generates AI-based responses. While highly accurate, outputs should not be used for harmful, fraudulent, or medical/legal dependency without verification.</p>
+
+      <p class="section-title">4. EVOSToken Policy</p>
+      <p>Tokens are internal credits only. They cannot be withdrawn, cashed out, sold, or traded externally.</p>
+
+      <p class="section-title">5. Payments</p>
+      <p>Upgrades (Core, Pro, King) are billed once per activation. Failed activations qualify for refunds.</p>
+
+      <hr>
+
+      <h3>Privacy Policy</h3>
+
+      <p class="section-title">1. Data We Collect</p>
+      <p>Username, email/phone, login history, messages, preferences, referral data.</p>
+
+      <p class="section-title">2. How Your Data is Used</p>
+      <p>• To run the platform  
+      • To improve chat accuracy  
+      • To detect abuse/fraud  
+      • To deliver tokens and upgrades  
+      Your personal data is <strong>never sold</strong>.</p>
+
+      <p class="section-title">3. Data Protection</p>
+      <p>All sensitive data is encrypted at rest and in transit.</p>
+
+      <p class="section-title">4. User Rights</p>
+      <p>You may request account deletion or data export via support email.</p>
+
+      <hr>
+
+      <h3>Refund Policy</h3>
+
+      <p class="section-title">1. Refund Eligibility</p>
+      <p>Refunds are only issued if:</p>
+      <ul>
+        <li>Payment was successful but upgrade was not applied.</li>
+        <li>A system error caused failed crediting.</li>
+      </ul>
+
+      <p class="section-title">2. Non-Refundable Cases</p>
+      <p>• User mistake  
+      • Successful upgrade  
+      • Token redemptions  
+      • Abuse or fraud</p>
+
+      <p class="section-title">3. Processing Time</p>
+      <p>Refunds are processed within 1–3 business days.</p>
+
+      <button class="agree-btn" id="agreeClose">Agree & Close</button>
+    </div>
+  </div>
+
+  <script>
+    // Theme Setup
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme) document.body.setAttribute("data-theme", savedTheme);
+    else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
+      document.body.setAttribute("data-theme", "dark");
+
+    // Modal Logic
+    const modal = document.getElementById("termsModal");
+    const openTerms = document.getElementById("openTerms");
+    const openPrivacy = document.getElementById("openPrivacy");
+    const openRefund = document.getElementById("openRefund");
+    const closeModal = document.getElementById("closeModal");
+    const agreeClose = document.getElementById("agreeClose");
+
+    openTerms.onclick = openPrivacy.onclick = openRefund.onclick = () =>
+      (modal.style.display = "flex");
+
+    closeModal.onclick = () => (modal.style.display = "none");
+
+    agreeClose.onclick = () => {
+      modal.style.display = "none";
+      document.getElementById("agree_terms").checked = true;
+    };
+
+    window.onclick = (e) => {
+      if (e.target === modal) modal.style.display = "none";
+    };
+
+    // Validation
+    document.getElementById("registerForm").addEventListener("submit", (e) => {
+      if (!document.getElementById("agree_terms").checked) {
+        e.preventDefault();
+        alert("Please agree to the Terms, Privacy, and Refund Policy before continuing.");
+      }
+    });
+  </script>
+</body>
+</html>
