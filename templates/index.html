@@ -104,7 +104,6 @@
       gap: 8px;
     }
 
-    /* Spinning logo animation */
     .spin-logo {
       width: 28px;
       height: 28px;
@@ -252,7 +251,7 @@
       #chat-form { padding-bottom: calc(env(safe-area-inset-bottom) + 8px); }
     }
 
-    /* --- Invite Popup --- */
+    /* INVITE POPUP */
     .invite-popup {
       position: fixed;
       top: 0; left: 0;
@@ -317,6 +316,17 @@
       from { opacity: 0; transform: scale(0.95); }
       to { opacity: 1; transform: scale(1); }
     }
+
+    /* FOOTER */
+    #site-footer {
+      text-align: center;
+      padding: 10px;
+      color: var(--text-color);
+      background: var(--chat-bot-bg);
+      border-top: 1px solid var(--border-color);
+      font-size: 13px;
+    }
+
   </style>
 </head>
 
@@ -329,6 +339,10 @@
       <a href="/upgrade">⚡ Upgrade</a>
       <a href="javascript:void(0)" onclick="showReferralPopup()">🎁 Invite</a>
       <a href="/evostoken">🪙 EvosToken</a>
+
+      <!-- SUPPORT ADDED -->
+      <a href="mailto:support@evosgpt.xyz">📨 Support</a>
+
       {% if tier in ["King", "Founder"] %}
         <a href="/admin">🛠 Admin</a>
       {% endif %}
@@ -367,6 +381,9 @@
 
     <div id="chat-box"></div>
   </div>
+
+  <!-- FOOTER ADDED -->
+  <footer id="site-footer">© 2025 EVOSGPT. All Rights Reserved.</footer>
 
   <form id="chat-form">
     <textarea id="message" placeholder="Type your message..." rows="1"></textarea>
@@ -487,7 +504,6 @@
     document.body.setAttribute("data-theme", savedTheme || "light");
     themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
 
-    // ---- INVITE / REFERRAL POPUP ----
     async function showReferralPopup() {
       try {
         const res = await fetch("/get_referral");
@@ -528,4 +544,3 @@
   </script>
 </body>
 </html>
-
