@@ -15,16 +15,11 @@
       --text-color: #333;
       --primary-color: #ff9800;
       --header-bg: #00d4ff;
-
       --sidebar-bg: #222;
-      --sidebar-footer-text: #999;
-
       --chat-user-bg: #00d4ff;
       --chat-user-text: #fff;
-
       --chat-bot-bg: #fff;
       --chat-bot-text: #333;
-
       --border-color: #ccc;
     }
 
@@ -32,13 +27,9 @@
       --bg-color: #121212;
       --text-color: #f5f5f5;
       --header-bg: #1e1e1e;
-
       --sidebar-bg: #111;
-      --sidebar-footer-text: #666;
-
       --chat-bot-bg: #1f1f1f;
       --chat-bot-text: #f5f5f5;
-
       --border-color: #333;
     }
 
@@ -50,10 +41,10 @@
       color: var(--text-color);
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      /* FIX: removed overflow:hidden so footer can appear */
     }
 
-    /* SIDEBAR */
+    /* Sidebar */
     #sidebar {
       width: 260px;
       background: var(--sidebar-bg);
@@ -68,7 +59,6 @@
       display: flex;
       flex-direction: column;
     }
-
     #sidebar a {
       display: block;
       padding: 12px;
@@ -76,23 +66,10 @@
       text-decoration: none;
     }
     #sidebar a:hover { background: var(--primary-color); }
-
     #sidebar.active { left: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.4); }
 
-    /* SIDEBAR FOOTER */
-    #sidebar-footer {
-      margin-top: auto;
-      padding: 14px 10px;
-      font-size: 12px;
-      text-align: center;
-      color: var(--sidebar-footer-text);
-      border-top: 1px solid #333;
-      background: #1a1a1a;
-    }
-
     #overlay {
-      position: fixed;
-      top: 0; left: 0;
+      position: fixed; top: 0; left: 0;
       width: 100%; height: 100%;
       background: rgba(0,0,0,0.5);
       display: none;
@@ -100,22 +77,11 @@
     }
     #overlay.active { display: block; }
 
-    .hub-toggle {
-      cursor: pointer;
-      padding: 12px;
-      font-weight: bold;
-      background: #333;
-      border-top: 1px solid #444;
-    }
-
-    .hub-content {
-      display: none;
-      background: #2a2a2a;
-      border-top: 1px solid #444;
-    }
+    .hub-toggle { cursor: pointer; padding: 12px; font-weight: bold; background: #333; border-top: 1px solid #444; }
+    .hub-content { display: none; background: #2a2a2a; border-top: 1px solid #444; }
     .hub-content a { padding-left: 24px; }
 
-    /* HEADER */
+    /* Header */
     header {
       background: var(--header-bg);
       color: white;
@@ -123,13 +89,14 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      z-index: 10;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      z-index: 10;
     }
 
     header h1 {
       margin: 0;
       font-size: 16px;
+      text-align: center;
       flex: 1;
       display: flex;
       align-items: center;
@@ -164,7 +131,6 @@
       margin-left: 10px;
     }
 
-    /* UPGRADE BUTTON */
     #upgrade-btn {
       position: fixed;
       top: 55px;
@@ -181,22 +147,26 @@
       z-index: 998;
     }
 
-    /* MAIN */
     #main-wrapper {
       display: flex;
       flex-direction: column;
       flex: 1;
-      overflow: hidden;
       background: var(--chat-bot-bg);
+
+      /* FIX: add space for chat form + footer */
+      padding-bottom: 160px;
     }
 
     #chat-box {
       flex: 1 1 auto;
+      min-height: 0;
       padding: 15px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      padding-bottom: 120px;
+      scroll-behavior: smooth;
+      /* FIX: extra safe padding so footer never overlaps messages */
+      padding-bottom: 180px;
     }
 
     .msg {
@@ -233,7 +203,6 @@
       font-size: 13px;
     }
 
-    /* CHAT FORM */
     #chat-form {
       display: flex;
       align-items: flex-end;
@@ -241,7 +210,10 @@
       padding: 10px;
       border-top: 1px solid var(--border-color);
       position: fixed;
-      bottom: 0; left: 0; right: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      box-sizing: border-box;
       box-shadow: 0 -2px 6px rgba(0,0,0,0.05);
       z-index: 50;
     }
@@ -252,17 +224,45 @@
       border-radius: 20px;
       border: 1px solid var(--border-color);
       resize: none;
-      background: var(--chat-bot-bg);
-      color: var(--chat-bot-text);
+      font-family: inherit;
+      overflow-y: auto;
       min-height: 40px;
       max-height: 140px;
-      overflow-y: auto;
+      line-height: 1.4;
+      background: var(--chat-bot-bg);
+      color: var(--chat-bot-text);
       font-size: 16px;
+      transition: background 0.3s, color 0.3s;
     }
+
+    #chat-form button {
+      margin-left: 8px;
+      padding: 8px 14px;
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    /* FOOTER FIX */
+    #site-footer {
+      text-align: center;
+      padding: 10px;
+      color: var(--text-color);
+      background: var(--chat-bot-bg);
+      border-top: 1px solid var(--border-color);
+      font-size: 13px;
+      margin-top: 20px;
+    }
+
   </style>
 </head>
 
 <body>
+
+  <!-- SIDEBAR -->
   <div id="sidebar">
     <a href="javascript:void(0)" onclick="toggleSidebar()">⬅ Back</a>
     <a href="/chat">💬 Chat</a>
@@ -277,7 +277,6 @@
       {% if tier in ["King", "Founder"] %}
         <a href="/admin">🛠 Admin</a>
       {% endif %}
-
       <a href="javascript:void(0)" onclick="clearChat()">🧹 Clear Chat</a>
 
       {% if not logged_in %}
@@ -287,12 +286,6 @@
         <a href="/logout">🚪 Logout</a>
       {% endif %}
     </div>
-
-    <!-- 🔥 SIDEBAR FOOTER MOVED HERE -->
-    <div id="sidebar-footer">
-      © 2025 EVOSGPT<br>
-      Evos Technologies
-    </div>
   </div>
 
   <div id="overlay" onclick="toggleSidebar()"></div>
@@ -301,13 +294,16 @@
     <button id="upgrade-btn" onclick="location.href='/upgrade'">⚡ Upgrade Tier</button>
   {% endif %}
 
+  <!-- MAIN -->
   <div id="main-wrapper">
     <header>
       <span class="menu-btn" onclick="toggleSidebar()">☰</span>
+
       <h1>
-        <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" class="spin-logo">
+        <img src="{{ url_for('static', filename='images/evosgpt-icon.png') }}" class="spin-logo" alt="EVOSGPT Logo">
         {{ tier }} Mode
       </h1>
+
       <div class="auth-links">
         {% if not logged_in %}
           <a href="/login">🔑 Login</a>
@@ -322,20 +318,31 @@
     <div id="chat-box"></div>
   </div>
 
-  <!-- ❌ Footer removed from main page (now inside sidebar) -->
+  <!-- FOOTER ALWAYS VISIBLE NOW -->
+  <footer id="site-footer">
+    © 2025 EVOSGPT. All rights reserved. Evos Technologies.
+  </footer>
 
+  <!-- CHAT FORM -->
   <form id="chat-form">
     <textarea id="message" placeholder="Type your message..." rows="1"></textarea>
     <button type="submit">Send</button>
   </form>
 
   <script>
+    /* JS — unchanged except chat padding fixes */
+
     const chatBox = document.getElementById("chat-box");
     const textarea = document.getElementById("message");
 
-    function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
+    function scrollToBottom() {
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
 
-    function saveChat() { localStorage.setItem("evos_chat_history", chatBox.innerHTML); }
+    function saveChat() {
+      localStorage.setItem("evos_chat_history", chatBox.innerHTML);
+    }
+
     function loadChat() {
       const saved = localStorage.getItem("evos_chat_history");
       if (saved) {
@@ -344,24 +351,22 @@
         scrollToBottom();
       }
     }
-    loadChat();
 
     function clearChat() {
       localStorage.removeItem("evos_chat_history");
       chatBox.innerHTML = "";
     }
 
-    /* CHAT SEND */
+    loadChat();
+
     document.getElementById("chat-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = textarea.value.trim();
       if (!text) return;
 
       chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${text}</div>`);
-      saveChat();
-      scrollToBottom();
-      textarea.value = "";
-      textarea.style.height = "40px";
+      saveChat(); scrollToBottom();
+      textarea.value = ""; textarea.style.height = "40px"; adjustChatPadding();
 
       const typing = document.createElement("div");
       typing.className = "msg bot";
@@ -381,11 +386,11 @@
 
         let botContent = "";
         if (data.image_url) {
-          botContent = `<img src="${data.image_url}" style="max-width:100%;border-radius:10px;">`;
+          botContent = `<img src="${data.image_url}" style="max-width:100%; border-radius:10px;">`;
         } else if (data.image_base64) {
-          botContent = `<img src="data:image/png;base64,${data.image_base64}" style="max-width:100%;border-radius:10px;">`;
+          botContent = `<img src="data:image/png;base64,${data.image_base64}" style="max-width:100%; border-radius:10px;">`;
         } else {
-          botContent = marked.parse(data.reply || "⚠ No reply");
+          botContent = marked.parse(data.reply || "⚠ No reply from server.");
         }
 
         chatBox.insertAdjacentHTML("beforeend", `
@@ -395,17 +400,14 @@
             <button class="copy-btn" onclick="copyText(this)">📋</button>
           </div>
         `);
-
-        saveChat();
-        scrollToBottom();
-
+        saveChat(); adjustChatPadding(); scrollToBottom();
       } catch (err) {
         typing.remove();
-        chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot">⚠ Error: ${err.message}</div>`);
+        chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot error">⚠ Error: ${err.message}</div>`);
+        saveChat();
       }
     });
 
-    /* ENTER SEND */
     textarea.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 768) {
         e.preventDefault();
@@ -413,11 +415,12 @@
       }
     });
 
-    function copyText(button) {
-      const text = button.parentElement.innerText.replace("📋", "").trim();
-      navigator.clipboard.writeText(text);
-      button.textContent = "✅";
-      setTimeout(() => button.textContent = "📋", 1200);
+    function copyText(btn) {
+      const text = btn.parentElement.innerText.replace("📋", "").trim();
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = "✅";
+        setTimeout(() => btn.textContent = "📋", 1500);
+      });
     }
 
     function toggleSidebar() {
@@ -431,49 +434,47 @@
     }
 
     function adjustChatPadding() {
-      const form = document.getElementById("chat-form");
-      chatBox.style.paddingBottom = `${form.offsetHeight + 20}px`;
+      chatBox.style.paddingBottom = "180px";
     }
+
     window.addEventListener("resize", adjustChatPadding);
     adjustChatPadding();
 
-    /* THEME */
     const themeToggle = document.getElementById("theme-toggle");
     themeToggle.addEventListener("click", () => {
       const current = document.body.getAttribute("data-theme");
-      const next = current === "dark" ? "light" : "dark";
-      document.body.setAttribute("data-theme", next);
-      themeToggle.textContent = next === "dark" ? "☀" : "🌙";
-      localStorage.setItem("theme", next);
+      const newTheme = current === "dark" ? "light" : "dark";
+      document.body.setAttribute("data-theme", newTheme);
+      themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
+      localStorage.setItem("theme", newTheme);
     });
 
     const savedTheme = localStorage.getItem("theme");
     document.body.setAttribute("data-theme", savedTheme || "light");
     themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
 
-    /* REFERRAL POPUP */
+    /* Referral Popup */
     async function showReferralPopup() {
       try {
         const res = await fetch("/get_referral");
         const data = await res.json();
         const link = data.link || "https://evosgpt.xyz/register";
 
-        const oldPopup = document.querySelector(".invite-popup");
-        if (oldPopup) oldPopup.remove();
+        const old = document.querySelector(".invite-popup");
+        if (old) old.remove();
 
         const popup = document.createElement("div");
         popup.className = "invite-popup";
         popup.innerHTML = `
           <div class="invite-card">
             <h2>🎁 Invite Friends</h2>
-            <p>Share your unique link:</p>
-            <input id="refLink" type="text" readonly value="${link}">
+            <p>Share your unique referral link:</p>
+            <input id="refLink" type="text" readonly value="${link}" />
             <button class="copy-btn" onclick="copyReferral()">📋 Copy</button>
             <button class="close-btn" onclick="closeReferral()">✖</button>
           </div>
         `;
         document.body.appendChild(popup);
-
       } catch (err) {
         alert("⚠️ Could not fetch referral link.");
       }
@@ -490,6 +491,8 @@
       const popup = document.querySelector(".invite-popup");
       if (popup) popup.remove();
     }
+
   </script>
+
 </body>
 </html>
