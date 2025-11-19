@@ -4,174 +4,320 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Register - EVOSGPT</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
 
   <style>
-    /* Smooth modal animation */
-    .modal-open { animation: fadeIn 0.2s ease-out; }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: scale(0.95); }
-      to { opacity: 1; transform: scale(1); }
+    :root {
+      --bg-color: #f5f7fa;
+      --text-color: #333;
+      --primary-color: #00d4ff;
+      --card-bg: #fff;
+      --border-color: #ccc;
+      --accent: #ff9800;
+      --footer-bg: #000;
+      --footer-text: #fff;
+    }
+
+    [data-theme="dark"] {
+      --bg-color: #121212;
+      --text-color: #f5f5f5;
+      --card-bg: #1f1f1f;
+      --border-color: #333;
+      --footer-bg: #111;
+      --footer-text: #e0e0e0;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg-color);
+      color: var(--text-color);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .form-box {
+      width: 100%;
+      max-width: 400px;
+      padding: 25px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+      position: relative;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: var(--primary-color);
+    }
+
+    input, button {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      font-size: 14px;
+    }
+
+    input {
+      background: var(--card-bg);
+      color: var(--text-color);
+    }
+
+    button {
+      background: var(--primary-color);
+      color: #fff;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    button:hover {
+      background: #00bde0;
+    }
+
+    .terms-box {
+      display: flex;
+      align-items: center;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .terms-box input {
+      width: auto;
+      margin-right: 6px;
+    }
+
+    .terms-box a {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    .msg {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    .msg.error {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .msg.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    /* Modal Styling */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      padding: 10px;
+    }
+
+    .modal-content {
+      background: var(--card-bg);
+      color: var(--text-color);
+      width: 95%;
+      max-width: 750px;
+      max-height: 85vh;
+      overflow-y: auto;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      position: relative;
+    }
+
+    .close {
+      position: absolute;
+      right: 15px;
+      top: 10px;
+      cursor: pointer;
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--accent);
+    }
+
+    .modal h3 {
+      color: var(--primary-color);
+      margin-top: 0;
+    }
+
+    .section-title {
+      margin-top: 20px;
+      font-weight: bold;
+      color: var(--accent);
+    }
+
+    .agree-btn {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      padding: 12px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 15px;
+      width: 100%;
+    }
+
+    .support {
+      text-align: center;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .support a {
+      color: var(--accent);
+      font-weight: bold;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 12px;
+      padding: 10px 0;
+      border-radius: 8px;
+      background: var(--footer-bg);
+      color: var(--footer-text);
     }
   </style>
 </head>
 
-<body class="bg-gray-900 text-white">
+<body>
+  <div class="form-box">
+    <h2>Create Account</h2>
 
-  <!-- MAIN CONTAINER -->
-  <div class="min-h-screen flex items-center justify-center p-4">
+    <form method="POST" id="registerForm">
+      <input type="text" name="username" placeholder="Username" required />
+      <input type="text" name="email" placeholder="Email or Mobile" required />
+      <input type="password" name="password" placeholder="Password" required />
+      <input type="password" name="confirm_password" placeholder="Confirm Password" required />
+      <input type="text" name="referral_code" placeholder="Referral Code (optional)" />
 
-    <div class="w-full max-w-md bg-gray-800 rounded-2xl shadow-2xl p-6 space-y-6">
-
-      <!-- Title -->
-      <h1 class="text-3xl font-bold text-center">
-        Create Your <span class="text-blue-400">EVOSGPT</span> Account
-      </h1>
-
-      <!-- FORM -->
-      <form id="registerForm" method="POST" class="space-y-4">
-
-        <input type="text" name="username" placeholder="Username" required
-          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
-
-        <input type="text" name="email" placeholder="Email or Mobile Number" required
-          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
-
-        <input type="password" name="password" placeholder="Password" required
-          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
-
-        <input type="password" name="confirm_password" placeholder="Confirm Password" required
-          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
-
-        <input type="text" name="referral_code" placeholder="Referral Code (optional)"
-          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
-
-        <!-- Terms Checkbox -->
-        <label class="flex items-center text-sm text-gray-300">
-          <input type="checkbox" id="agree_terms" class="mr-2" />
-          I agree to the 
-          <button type="button" id="openTerms" class="ml-1 text-blue-400 underline">Terms, Privacy & Refund Policy</button>
+      <div class="terms-box">
+        <input type="checkbox" id="agree_terms" name="agree_terms" />
+        <label for="agree_terms">
+          I agree to the <a id="openTerms">Terms</a>, <a id="openPrivacy">Privacy</a>, & <a id="openRefund">Refund Policy</a>
         </label>
-
-        <!-- Register Button -->
-        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-xl font-semibold">
-          Register
-        </button>
-      </form>
-
-      <!-- Login Redirect -->
-      <p class="text-center text-sm text-gray-300">
-        Already have an account?
-        <a href="/login" class="text-blue-400 underline">Login here</a>.
-      </p>
-
-      <!-- Social Login -->
-      <div class="flex items-center my-4">
-        <div class="flex-grow h-px bg-gray-600"></div>
-        <span class="px-2 text-gray-400 text-xs">OR CONTINUE WITH</span>
-        <div class="flex-grow h-px bg-gray-600"></div>
       </div>
 
-      <div class="grid grid-cols-3 gap-3">
-        <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Google</button>
-        <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Facebook</button>
-        <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Apple</button>
-      </div>
+      <button type="submit">Register</button>
+    </form>
 
-      <!-- Support -->
-      <p class="text-center text-sm text-gray-400 mt-3">
-        Support: <a href="mailto:support@evosgpt.xyz" class="text-blue-400 underline">support@evosgpt.xyz</a>
-      </p>
+    {% if msg %}
+    <div class="msg {{ msg_type }}">{{ msg }}</div>
+    {% endif %}
 
-      <!-- Copyright -->
-      <footer class="text-center text-xs text-gray-500 mt-4">
-        © 2025 EVOSGPT — All Rights Reserved
-      </footer>
+    <p>Already have an account? <a href="/login">Login here</a></p>
 
+    <div class="support">
+      Support: <a href="mailto:support@evosgpt.xyz">support@evosgpt.xyz</a>
+    </div>
+
+    <footer>© 2025 EVOS TECHNOLOGIES. All Rights Reserved.</footer>
+  </div>
+
+  <!-- FULL MODAL -->
+  <div id="termsModal" class="modal">
+    <div class="modal-content">
+      <span class="close" id="closeModal">&times;</span>
+
+      <h3>EVOSGPT Terms of Service, Privacy Policy & Refund Policy</h3>
+
+      <h4 class="section-title">1. Acceptance of Terms</h4>
+      <p>By creating an EVOSGPT account, you agree to follow all terms listed here. Updates may occur at any time.</p>
+
+      <h4 class="section-title">2. General Usage</h4>
+      <ul>
+        <li>No illegal activities</li>
+        <li>No harmful or fraudulent content</li>
+        <li>No hacking or reverse-engineering</li>
+        <li>No automated abuse</li>
+      </ul>
+
+      <h4 class="section-title">3. EVOSToken Policy</h4>
+      <p>Tokens have no monetary value and cannot be sold or withdrawn.</p>
+
+      <h4 class="section-title">4. Paid Tiers</h4>
+      <ul>
+        <li>Core – $1</li>
+        <li>Pro – $5</li>
+        <li>King – $9</li>
+      </ul>
+
+      <h4 class="section-title">5. Refund Policy</h4>
+      <p>Refunds only apply to failed activations or duplicate payments.</p>
+
+      <h4 class="section-title">6. Referral System</h4>
+      <p>Fraudulent referrals lead to suspension.</p>
+
+      <h4 class="section-title">7. Privacy Policy</h4>
+      <p>We collect minimal data and NEVER sell personal information.</p>
+
+      <h4 class="section-title">8. Account Security</h4>
+      <p>Users are responsible for safeguarding their passwords.</p>
+
+      <h4 class="section-title">9. Service Availability</h4>
+      <p>EVOSGPT may undergo maintenance occasionally.</p>
+
+      <button class="agree-btn" id="agreeClose">Agree & Close</button>
     </div>
   </div>
 
-
-  <!-- TERMS & POLICY MODAL -->
-  <div id="termsModal"
-    class="hidden fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-
-    <div class="bg-gray-800 max-w-3xl w-full rounded-2xl p-6 overflow-y-auto max-h-[80vh] modal-open">
-
-      <h2 class="text-2xl font-bold mb-4 text-blue-400">
-        EVOSGPT Terms of Service, Privacy Policy, Refund Policy & EVOSToken Rules
-      </h2>
-
-      <div class="space-y-4 text-sm leading-relaxed text-gray-300">
-
-        <h3 class="text-lg font-semibold text-white">1. Acceptance of Terms</h3>
-        <p>By creating an EVOSGPT account, you agree to follow all terms, rules, and updates provided.</p>
-
-        <h3 class="text-lg font-semibold text-white">2. Platform Usage</h3>
-        <p>Users must not engage in hacking, abuse, reverse engineering, illegal activity, or exploit attempts.</p>
-
-        <h3 class="text-lg font-semibold text-white">3. Privacy Policy</h3>
-        <p>
-          We collect minimal data: username, email/phone, login logs, chats (anonymized), referrals, payments.
-          <br />We do <strong>not</strong> sell or share personal data.
-        </p>
-
-        <h3 class="text-lg font-semibold text-white">4. Refund Policy</h3>
-        <p>Refunds only apply if:
-          <br>• Payment succeeded but tier didn't activate  
-          • System error caused incorrect charging  
-        </p>
-
-        <h3 class="text-lg font-semibold text-white">5. EVOSToken Policy</h3>
-        <p>
-          Tokens cannot be cashed out, refunded, traded, or sold.
-          They may be redeemed for upgrades but not withdrawn.
-        </p>
-
-        <h3 class="text-lg font-semibold text-white">6. Security Disclaimer</h3>
-        <p>Any attempt to hack, clone, bypass, tamper or duplicate EVOSGPT leads to permanent suspension.</p>
-
-        <h3 class="text-lg font-semibold text-white">7. Updates</h3>
-        <p>Policies may update at any time as EVOSGPT evolves. Continued use = acceptance.</p>
-
-      </div>
-
-      <!-- Close Button -->
-      <button id="closeTerms"
-        class="mt-6 w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-xl font-semibold">
-        Agree & Close
-      </button>
-
-      <!-- COPYRIGHT -->
-      <p class="text-center text-gray-500 text-xs mt-4">© 2025 EVOSGPT — All Rights Reserved</p>
-    </div>
-  </div>
-
-
-  <!-- SCRIPT -->
   <script>
-    const modal = document.getElementById("termsModal");
-    const openBtn = document.getElementById("openTerms");
-    const closeBtn = document.getElementById("closeTerms");
+    /** Theme Setup **/
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme) document.body.setAttribute("data-theme", savedTheme);
+    else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
+      document.body.setAttribute("data-theme", "dark");
 
-    openBtn.onclick = () => modal.classList.remove("hidden");
-    closeBtn.onclick = () => {
-      modal.classList.add("hidden");
+    /** Modal Logic **/
+    const modal = document.getElementById("termsModal");
+    const openTerms = document.getElementById("openTerms");
+    const openPrivacy = document.getElementById("openPrivacy");
+    const openRefund = document.getElementById("openRefund");
+    const closeModal = document.getElementById("closeModal");
+    const agreeClose = document.getElementById("agreeClose");
+
+    openTerms.onclick = openPrivacy.onclick = openRefund.onclick = () =>
+      (modal.style.display = "flex");
+
+    closeModal.onclick = () => (modal.style.display = "none");
+
+    agreeClose.onclick = () => {
+      modal.style.display = "none";
       document.getElementById("agree_terms").checked = true;
     };
 
     window.onclick = (e) => {
-      if (e.target === modal) modal.classList.add("hidden");
+      if (e.target === modal) modal.style.display = "none";
     };
 
-    // Form Validation
+    /** Validation **/
     document.getElementById("registerForm").addEventListener("submit", (e) => {
       if (!document.getElementById("agree_terms").checked) {
         e.preventDefault();
-        alert("Please agree to the Terms & Policy before continuing.");
+        alert("Please agree to the Terms, Privacy, and Refund Policy before continuing.");
       }
     });
   </script>
-
 </body>
 </html>
