@@ -3,95 +3,174 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EVOSGPT Login / Register</title>
+  <title>Register - EVOSGPT</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+
+  <style>
+    /* Smooth modal animation */
+    .modal-open { animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+  </style>
 </head>
+
 <body class="bg-gray-900 text-white">
 
-  <!-- Main Container -->
+  <!-- MAIN CONTAINER -->
   <div class="min-h-screen flex items-center justify-center p-4">
 
     <div class="w-full max-w-md bg-gray-800 rounded-2xl shadow-2xl p-6 space-y-6">
 
       <!-- Title -->
-      <h1 class="text-3xl font-bold text-center">Welcome to <span class="text-blue-400">EVOSGPT</span></h1>
-      <p class="text-center text-gray-300 text-sm">Register or Login to continue</p>
+      <h1 class="text-3xl font-bold text-center">
+        Create Your <span class="text-blue-400">EVOSGPT</span> Account
+      </h1>
 
-      <!-- Buttons -->
-      <div class="space-y-3">
-        <button class="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-xl font-semibold">Register</button>
-        <button class="w-full bg-gray-700 hover:bg-gray-600 p-3 rounded-xl font-semibold">Login</button>
+      <!-- FORM -->
+      <form id="registerForm" method="POST" class="space-y-4">
 
-        <!-- Social Login -->
-        <div class="flex items-center my-4">
-          <div class="flex-grow h-px bg-gray-600"></div>
-          <span class="px-2 text-gray-400 text-sm">OR CONTINUE WITH</span>
-          <div class="flex-grow h-px bg-gray-600"></div>
-        </div>
+        <input type="text" name="username" placeholder="Username" required
+          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
 
-        <div class="grid grid-cols-3 gap-3">
-          <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Google</button>
-          <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Facebook</button>
-          <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Apple</button>
-        </div>
+        <input type="text" name="email" placeholder="Email or Mobile Number" required
+          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
+
+        <input type="password" name="password" placeholder="Password" required
+          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
+
+        <input type="password" name="confirm_password" placeholder="Confirm Password" required
+          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
+
+        <input type="text" name="referral_code" placeholder="Referral Code (optional)"
+          class="w-full p-3 rounded-xl bg-gray-700 border border-gray-600 placeholder-gray-400" />
+
+        <!-- Terms Checkbox -->
+        <label class="flex items-center text-sm text-gray-300">
+          <input type="checkbox" id="agree_terms" class="mr-2" />
+          I agree to the 
+          <button type="button" id="openTerms" class="ml-1 text-blue-400 underline">Terms, Privacy & Refund Policy</button>
+        </label>
+
+        <!-- Register Button -->
+        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-xl font-semibold">
+          Register
+        </button>
+      </form>
+
+      <!-- Login Redirect -->
+      <p class="text-center text-sm text-gray-300">
+        Already have an account?
+        <a href="/login" class="text-blue-400 underline">Login here</a>.
+      </p>
+
+      <!-- Social Login -->
+      <div class="flex items-center my-4">
+        <div class="flex-grow h-px bg-gray-600"></div>
+        <span class="px-2 text-gray-400 text-xs">OR CONTINUE WITH</span>
+        <div class="flex-grow h-px bg-gray-600"></div>
       </div>
 
-      <!-- Terms Modal Trigger -->
-      <p class="text-center text-xs text-gray-400 mt-4">By continuing, you agree to our <button id="openTerms" class="text-blue-400 underline">Terms & Policies</button>.</p>
+      <div class="grid grid-cols-3 gap-3">
+        <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Google</button>
+        <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Facebook</button>
+        <button class="bg-gray-700 hover:bg-gray-600 p-3 rounded-xl text-sm">Apple</button>
+      </div>
+
+      <!-- Support -->
+      <p class="text-center text-sm text-gray-400 mt-3">
+        Support: <a href="mailto:support@evosgpt.xyz" class="text-blue-400 underline">support@evosgpt.xyz</a>
+      </p>
+
+      <!-- Copyright -->
+      <footer class="text-center text-xs text-gray-500 mt-4">
+        © 2025 EVOSGPT — All Rights Reserved
+      </footer>
 
     </div>
   </div>
 
 
-  <!-- TERMS & CONDITIONS MODAL -->
-  <div id="termsModal" class="hidden fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-    <div class="bg-gray-800 max-w-3xl w-full rounded-2xl p-6 overflow-y-auto max-h-[80vh]">
+  <!-- TERMS & POLICY MODAL -->
+  <div id="termsModal"
+    class="hidden fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
 
-      <h2 class="text-2xl font-bold mb-4 text-blue-400">EVOSGPT Terms, Privacy, Refund Policy & EVOSToken Policy</h2>
+    <div class="bg-gray-800 max-w-3xl w-full rounded-2xl p-6 overflow-y-auto max-h-[80vh] modal-open">
+
+      <h2 class="text-2xl font-bold mb-4 text-blue-400">
+        EVOSGPT Terms of Service, Privacy Policy, Refund Policy & EVOSToken Rules
+      </h2>
 
       <div class="space-y-4 text-sm leading-relaxed text-gray-300">
 
-        <h3 class="text-lg font-semibold text-white">1. Terms of Use</h3>
-        <p>By using EVOSGPT WebCore, you agree to follow all rules, policies, and guidelines we provide. You must be 13+ or have permission from a guardian.</p>
+        <h3 class="text-lg font-semibold text-white">1. Acceptance of Terms</h3>
+        <p>By creating an EVOSGPT account, you agree to follow all terms, rules, and updates provided.</p>
 
-        <h3 class="text-lg font-semibold text-white">2. Privacy Policy</h3>
-        <p>We respect your privacy. EVOSGPT does not sell your data. We only store what is needed for your account, subscriptions, and AI performance. You may request deletion at any time.</p>
+        <h3 class="text-lg font-semibold text-white">2. Platform Usage</h3>
+        <p>Users must not engage in hacking, abuse, reverse engineering, illegal activity, or exploit attempts.</p>
 
-        <h3 class="text-lg font-semibold text-white">3. Refund Policy</h3>
-        <p>All payments are final. Refunds are only provided if: (a) you were wrongly charged, (b) system failure prevented access, or (c) you were subscribed to the wrong tier due to a WebCore bug.</p>
+        <h3 class="text-lg font-semibold text-white">3. Privacy Policy</h3>
+        <p>
+          We collect minimal data: username, email/phone, login logs, chats (anonymized), referrals, payments.
+          <br />We do <strong>not</strong> sell or share personal data.
+        </p>
 
-        <h3 class="text-lg font-semibold text-white">4. EVOSToken Conversion Policy</h3>
-        <p>EVOSToken can be bought or earned. Tokens are not refundable. Tokens can be converted to subscription time but cannot be converted back to cash.</p>
+        <h3 class="text-lg font-semibold text-white">4. Refund Policy</h3>
+        <p>Refunds only apply if:
+          <br>• Payment succeeded but tier didn't activate  
+          • System error caused incorrect charging  
+        </p>
 
-        <h3 class="text-lg font-semibold text-white">5. Security Disclaimer</h3>
-        <p>We take security seriously. Any attempt to hack, bypass, duplicate, clone, or exploit WebCore/EVOSGPT will lead to a permanent ban.</p>
+        <h3 class="text-lg font-semibold text-white">5. EVOSToken Policy</h3>
+        <p>
+          Tokens cannot be cashed out, refunded, traded, or sold.
+          They may be redeemed for upgrades but not withdrawn.
+        </p>
 
-        <h3 class="text-lg font-semibold text-white">6. User Responsibility</h3>
-        <p>You are responsible for your account security. EVOSGPT is not responsible for password mishandling or sharing.</p>
+        <h3 class="text-lg font-semibold text-white">6. Security Disclaimer</h3>
+        <p>Any attempt to hack, clone, bypass, tamper or duplicate EVOSGPT leads to permanent suspension.</p>
 
         <h3 class="text-lg font-semibold text-white">7. Updates</h3>
-        <p>Policies may change as EVOSGPT evolves. Continued use means acceptance of updated terms.</p>
+        <p>Policies may update at any time as EVOSGPT evolves. Continued use = acceptance.</p>
 
       </div>
 
       <!-- Close Button -->
-      <button id="closeTerms" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-xl font-semibold">Close</button>
+      <button id="closeTerms"
+        class="mt-6 w-full bg-blue-600 hover:bg-blue-700 p-3 rounded-xl font-semibold">
+        Agree & Close
+      </button>
 
       <!-- COPYRIGHT -->
       <p class="text-center text-gray-500 text-xs mt-4">© 2025 EVOSGPT — All Rights Reserved</p>
-
     </div>
   </div>
 
 
-  <!-- Scripts -->
+  <!-- SCRIPT -->
   <script>
-    const openBtn = document.getElementById('openTerms');
-    const closeBtn = document.getElementById('closeTerms');
-    const modal = document.getElementById('termsModal');
+    const modal = document.getElementById("termsModal");
+    const openBtn = document.getElementById("openTerms");
+    const closeBtn = document.getElementById("closeTerms");
 
-    openBtn.onclick = () => modal.classList.remove('hidden');
-    closeBtn.onclick = () => modal.classList.add('hidden');
+    openBtn.onclick = () => modal.classList.remove("hidden");
+    closeBtn.onclick = () => {
+      modal.classList.add("hidden");
+      document.getElementById("agree_terms").checked = true;
+    };
+
+    window.onclick = (e) => {
+      if (e.target === modal) modal.classList.add("hidden");
+    };
+
+    // Form Validation
+    document.getElementById("registerForm").addEventListener("submit", (e) => {
+      if (!document.getElementById("agree_terms").checked) {
+        e.preventDefault();
+        alert("Please agree to the Terms & Policy before continuing.");
+      }
+    });
   </script>
 
 </body>
