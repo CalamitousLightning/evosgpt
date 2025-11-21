@@ -72,23 +72,6 @@
     }
     button:hover { background: #00bde0; }
 
-    .oauth-btn {
-      width: 100%;
-      padding: 10px;
-      margin-top: 10px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: bold;
-      cursor: pointer;
-      color: white;
-    }
-
-    .google-btn { background: #db4437; }
-    .facebook-btn { background: #1877f2; }
-    .discord-btn { background: #5865F2; }
-    .apple-btn { background: #000; }
-
     p {
       text-align: center;
       margin-top: 15px;
@@ -110,6 +93,7 @@
     .msg.error { background: #ffebee; color: #c62828; }
     .msg.success { background: #e8f5e9; color: #2e7d32; }
 
+    /* Footer */
     .footer {
       text-align: center;
       font-size: 13px;
@@ -146,45 +130,15 @@
       <div class="msg {{ msg_type }}">{{ msg }}</div>
     {% endif %}
 
-    <hr style="margin:15px 0; opacity:0.4;">
-
-    <button class="oauth-btn google-btn" onclick="oauthLogin('google')">Continue with Google</button>
-    <button class="oauth-btn facebook-btn" onclick="oauthLogin('facebook')">Continue with Facebook</button>
-    <button class="oauth-btn discord-btn" onclick="oauthLogin('discord')">Continue with Discord</button>
-    <button class="oauth-btn apple-btn" onclick="oauthLogin('apple')">Continue with Apple</button>
-
     <p>Don’t have an account? <a href="{{ url_for('register') }}">Register</a></p>
   </div>
 
   <div class="footer">
-    (c) 2025 Evos Technologies. All Rights Reserved
+    (c) 2025 Evos Technologies, all rights reserved
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
   <script>
-    const client = supabase.createClient(
-      "https://ttcavdmgylcxmzdijcsx.supabase.co",
-      "sys1q0zg3clqajs04p2yhkgf96nf4hmup9mdr8l38u6"
-    );
-
-    async function oauthLogin(provider) {
-      try {
-        const { data, error } = await client.auth.signInWithOAuth({
-          provider: provider,
-          options: {
-            redirectTo: "https://evosgpt.xyz/oauth/callback"
-          }
-        });
-
-        if (error) {
-          alert("Login failed: " + error.message);
-        }
-      } catch {
-        alert("Unexpected error occurred.");
-      }
-    }
-
+    // Apply saved theme or follow system
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) {
       document.body.setAttribute("data-theme", savedTheme);
