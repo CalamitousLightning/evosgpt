@@ -2040,6 +2040,306 @@ def get_referral():
         log_suspicious("ReferralGenError", str(e))
         return jsonify({"link": "https://evosgpt.xyz/register"})
 
+# --- Paste below your existing auth routes (login/register/logout) ---
+
+import os
+import requests
+from urllib.parse import urlencode, quote
+
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ttcavdmgylcxmzdijcsx.supabase.co")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "sys1q0zg3clqajs04p2yhkgf96nf4hmup9mdr8l38u6")  # replace via env vars in production
+
+# Allowed providers list for sanity
+ALLOWED_OAUTH_PROVIDERS = {"google", "facebook", "discord", "apple"}
+
+# 1) Route to START OAuth (optional — frontend can also do oauth via supabase-js)
+@app.route("/oauth/<provider>", methods=["GET"])
+def start_oauth(provider):
+    """
+    Redirects user to Supabase OAuth authorize endpoint.
+    You can optionally call this server route instead of doing oauth from the frontend.
+    Add ?ref=REFCODE to preserve referral through the flow.
+    """
+    provider = provider.lower()
+    if provider not in ALLOWED_OAUTH_PROVIDERS:
+        flash("Unsupported OAuth provider.")
+        return redirect(url_for("login"))
+
+    # preserve referral if present
+    ref = request.args.get("ref")
+    if ref:
+        session["referral_pending"] = ref
+
+    # where Supabase will redirect back after provider auth
+    redirect_to = url_for("oauth_callback", _external=True)  # server callback
+    # build authorize URL (implicit/redirect flow)
+    params = {
+        "provider": provider,
+        "redirect_to": redirect_to
+        # you can add "scopes": "email" if necessary
+    }
+    auth_url = f"{SUPABASE_URL}/auth/v1/authorize?{urlencode(params, quote_via=quote)}"
+    return redirect(auth_url)
+
+
+# 2) Callback route - Supabase redirects here after OAuth
+@app.route("/oauth/callback", methods=["GET"])
+def oauth_callback():
+    """
+    Supabase may return information in the URL fragment (which the server cannot read)
+    — so typical pattern: have frontend read the fragment and POST the access_token to /oauth/session.
+    This callback also supports server-side query params if your Supabase setup returns token in query.
+    We'll:
+      - Try to read access_token from query params (if present)
+      - Otherwise show a small page with JS that copies fragment into a POST to /oauth/session
+    """
+    # If access_token present as query param (depends on flow), verify immediately:
+    access_token = request.args.get("access_token") or request.args.get("token")
+    # If code is present (authorization_code flow), you could exchange it server-side using service role,
+    # but we avoid using secret keys here. If you need code exchange, use service_role key in a secure env var.
+    if access_token:
+        # forward to session handler (server-side verify and login)
+        return redirect(url_for("oauth_session_html") + f"?access_token={access_token}")
+
+    # otherwise serve a tiny HTML that extracts fragment (#access_token=...) and POSTs to /oauth/session
+    # Also include any referral stored in session so JS can include it.
+    referral_pending = session.get("referral_pending", "")
+    return f"""
+    <!doctype html>
+    <html>
+      <head><meta charset="utf-8"><title>OAuth callback</title></head>
+      <body>
+        <p>Finalizing login — please wait...</p>
+        <script>
+          // read fragment (where supabase-js places the access_token for implicit flow)
+          const fragment = new URLSearchParams(window.location.hash.slice(1));
+          const token = fragment.get("access_token") || fragment.get("access_token_token") || null;
+          // fallback: attempt to read query param if any (rare)
+          const urlParams = new URLSearchParams(window.location.search);
+          const qtoken = urlParams.get("access_token") || urlParams.get("token");
+
+          const accessToken = token || qtoken;
+          if (!accessToken) {{
+            document.body.innerHTML = "<p style='color:red'>No access token found. Please return to the login page and try again.</p>";
+          }} else {{
+            // POST access token to server to verify & create local user
+            fetch("{url_for('oauth_session', _external=True)}", {{
+              method: "POST",
+              headers: {{ "Content-Type": "application/json" }},
+              body: JSON.stringify({{
+                access_token: accessToken,
+                referral: "{referral_pending}"
+              }})
+            }}).then(resp => resp.json()).then(data => {{
+              if (data.success) {{
+                // redirect to app
+                window.location.href = "{url_for('index', _external=True)}";
+              }} else {{
+                document.body.innerHTML = "<p style='color:red'>OAuth failed: " + (data.error || 'unknown') + "</p>";
+              }}
+            }});
+          }}
+        </script>
+      </body>
+    </html>
+    """
+
+
+# 3) Server endpoint to accept an access_token and verify user with Supabase
+@app.route("/oauth/session", methods=["POST"])
+def oauth_session():
+    """
+    POST JSON payload:
+    {
+      "access_token": "<provider access token from supabase oauth>",
+      "referral": "REF-..."  (optional)
+    }
+
+    This endpoint:
+      - verifies token by calling Supabase /auth/v1/user with Authorization: Bearer <token>
+      - creates/looks up local sqlite user, assigns tier/referral, sets session, and returns JSON { success: true }.
+    """
+    try:
+        data = request.get_json() or {}
+        access_token = data.get("access_token")
+        referral = data.get("referral") or session.get("referral_pending")
+
+        if not access_token:
+            return {"success": False, "error": "no_access_token"}, 400
+
+        # Call Supabase to get user info
+        user_info_url = f"{SUPABASE_URL}/auth/v1/user"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "apikey": SUPABASE_ANON_KEY,
+            "Content-Type": "application/json"
+        }
+        resp = requests.get(user_info_url, headers=headers, timeout=8)
+        if resp.status_code != 200:
+            return {"success": False, "error": "invalid_token_or_supabase_error", "detail": resp.text}, 400
+
+        supa_user = resp.json()
+        # supa_user usually contains: id, email, user_metadata, app_metadata, etc.
+        supa_id = supa_user.get("id")
+        email = supa_user.get("email")
+        username_from_email = (email.split("@")[0]) if email else f"user_{supa_id[:6]}"
+
+        # Now check local sqlite users table for an account with this supabase id or email
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
+        # first try supabase id mapped to provider account (we store provider_id in users.supabase_id)
+        c.execute("SELECT id, username, tier, status FROM users WHERE supabase_id = ?", (supa_id,))
+        row = c.fetchone()
+
+        if row:
+            user_id, username, tier, status = row
+            # If account suspended
+            if status != "active":
+                conn.close()
+                return {"success": False, "error": "suspended"}, 403
+
+            # log in
+            session["user_id"] = user_id
+            session["username"] = username
+            session["tier"] = tier
+            conn.close()
+            # clear referral_pending
+            session.pop("referral_pending", None)
+            return {"success": True}
+
+        # if no supabase_id mapping, try by email (might be existing local account)
+        c.execute("SELECT id, username, tier, status FROM users WHERE email = ?", (email,))
+        row2 = c.fetchone()
+        if row2:
+            user_id, username, tier, status = row2
+            if status != "active":
+                conn.close()
+                return {"success": False, "error": "suspended"}, 403
+            # update this local user to remember supabase id for future quick mapping
+            try:
+                c.execute("UPDATE users SET supabase_id = ? WHERE id = ?", (supa_id, user_id))
+                conn.commit()
+            except Exception as e:
+                # non-fatal
+                print("[WARN] Failed to attach supabase_id:", e)
+            session["user_id"] = user_id
+            session["username"] = username
+            session["tier"] = tier
+            conn.close()
+            session.pop("referral_pending", None)
+            return {"success": True}
+
+        # else create local user automatically
+        # generate a unique username base (ensure uniqueness)
+        base_username = username_from_email
+        candidate = base_username
+        suffix = 1
+        while True:
+            c.execute("SELECT 1 FROM users WHERE username = ?", (candidate,))
+            if not c.fetchone():
+                break
+            candidate = f"{base_username}{suffix}"
+            suffix += 1
+
+        # assign tier same as register flow: first 50 => Pro else Basic
+        c.execute("SELECT COUNT(*) FROM users")
+        total_users = c.fetchone()[0] or 0
+        tier = "Pro" if total_users < 50 else "Basic"
+
+        # generate referral code
+        def generate_referral_code_short():
+            import random, string
+            return "REF-" + ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        referral_code = generate_referral_code_short()
+
+        # insert new local user (password empty, oauth account)
+        c.execute("""
+            INSERT INTO users (username, email, password, tier, referral_code, supabase_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (candidate, email, "", tier, referral_code, supa_id))
+        new_user_id = c.lastrowid
+        conn.commit()
+
+        # credit referrer if referral pending
+        if referral:
+            try:
+                c.execute("UPDATE users SET referrals_used = referrals_used + 1 WHERE referral_code = ?", (referral,))
+                conn.commit()
+            except Exception as e:
+                print("[WARN] failed to credit referrer:", e)
+
+        # merge guest chats if present
+        guest_id = session.pop("guest_id", None)
+        if guest_id:
+            try:
+                c.execute("UPDATE memory SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (new_user_id, guest_id))
+                c.execute("UPDATE chat_logs SET user_id = ?, guest_id = NULL WHERE guest_id = ?", (new_user_id, guest_id))
+                conn.commit()
+            except Exception as e:
+                log_suspicious("GuestAssignFail", str(e))
+
+        conn.close()
+
+        # optional: try to replicate to Supabase table users (non-blocking)
+        try:
+            if "supabase" in globals():
+                supabase.table("users").insert({
+                    "username": candidate,
+                    "email": email,
+                    "tier": tier,
+                    "referral_code": referral_code,
+                    "supabase_id": supa_id
+                }).execute()
+        except Exception as e:
+            print("[WARN] supabase sync failed", e)
+
+        # set session and finish
+        session["user_id"] = new_user_id
+        session["username"] = candidate
+        session["tier"] = tier
+        session.pop("referral_pending", None)
+
+        # log
+        log_action(new_user_id, "oauth_login", f"OAuth sign-in via supabase provider for {email}")
+        return {"success": True}
+    except Exception as e:
+        print("[ERROR] /oauth/session:", e)
+        return {"success": False, "error": "server_error", "detail": str(e)}, 500
+
+
+# helper small HTML endpoint (optional) to show POST UI if needed
+@app.route("/oauth/session_html", methods=["GET"])
+def oauth_session_html():
+    """
+    Optional helper used by oauth_callback redirect logic: if callback had access_token in query,
+    this page POSTs the access token to /oauth/session by fetching via JS.
+    """
+    access_token = request.args.get("access_token", "")
+    referral_pending = session.get("referral_pending", "")
+    return f"""
+    <!doctype html>
+    <html>
+      <head><meta charset='utf-8'><title>Finalize OAuth</title></head>
+      <body>
+        <p>Finalizing login...</p>
+        <script>
+          (async function() {{
+            const res = await fetch("{url_for('oauth_session', _external=True)}", {{
+              method: "POST",
+              headers: {{ "Content-Type": "application/json" }},
+              body: JSON.stringify({{ access_token: "{access_token}", referral: "{referral_pending}" }})
+            }});
+            const data = await res.json();
+            if (data.success) window.location = "{url_for('index', _external=True)}";
+            else document.body.innerHTML = "<p style='color:red'>OAuth failed: " + (data.error||'unknown') + "</p>";
+          }})();
+        </script>
+      </body>
+    </html>
+    """
+
+
+# ---------- end of oauth additions ----------
 
 # ---------- UPGRADE ROUTE (Paystack + Coinbase + Bank) ----------
 # ---------- UPGRADE ROUTE (Paystack + Coinbase + Bank) ----------
@@ -2634,6 +2934,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
