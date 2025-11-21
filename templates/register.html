@@ -81,19 +81,6 @@
       background: #00bde0;
     }
 
-    .small-oauth-btn {
-      width: 100%;
-      background: var(--accent);
-      color: white;
-      padding: 10px;
-      margin-top: 10px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: bold;
-      border: none;
-    }
-
     .terms-box {
       display: flex;
       align-items: center;
@@ -130,7 +117,7 @@
       color: #2e7d32;
     }
 
-    /* Main Modal for Terms */
+    /* Modal Styling */
     .modal {
       display: none;
       position: fixed;
@@ -168,44 +155,39 @@
       color: var(--accent);
     }
 
-    /* OAUTH POPUP MODAL  */
-    .oauth-modal {
-      display: none;
-      position: fixed;
-      z-index: 99999;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.6);
-      justify-content: center;
-      align-items: center;
+    .modal h3 {
+      color: var(--primary-color);
+      margin-top: 0;
     }
 
-    .oauth-box {
-      width: 90%;
-      max-width: 350px;
-      background: var(--card-bg);
-      padding: 20px;
-      border-radius: 12px;
-      text-align: center;
-    }
-
-    .oauth-btn {
-      width: 100%;
-      padding: 12px;
-      margin-top: 10px;
-      border-radius: 8px;
-      color: white;
+    .section-title {
+      margin-top: 20px;
       font-weight: bold;
-      border: none;
-      cursor: pointer;
+      color: var(--accent);
     }
 
-    .google-btn { background: #db4437; }
-    .discord-btn { background: #5865F2; }
-    .facebook-btn { background: #1877f2; }
-    .apple-btn { background: #000; }
+    .agree-btn {
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      padding: 12px 15px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-top: 15px;
+      width: 100%;
+    }
+
+    .support {
+      text-align: center;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+
+    .support a {
+      color: var(--accent);
+      font-weight: bold;
+    }
 
     footer {
       text-align: center;
@@ -238,9 +220,6 @@
       </div>
 
       <button type="submit">Register</button>
-
-      <!-- OAUTH POPUP BUTTON -->
-      <button type="button" class="small-oauth-btn" id="openOAuth">Or Sign Up With</button>
     </form>
 
     {% if msg %}
@@ -249,10 +228,14 @@
 
     <p>Already have an account? <a href="/login">Login here</a></p>
 
-    <footer>© 2025 Evos Technologies. All Rights Reserved.</footer>
+    <div class="support">
+      Support: <a href="mailto:support@evosgpt.xyz">support@evosgpt.xyz</a>
+    </div>
+
+    <footer>© 2025 EVOS TECHNOLOGIES. All Rights Reserved.</footer>
   </div>
 
-  <!-- TERMS MODAL -->
+  <!-- FULL MODAL -->
   <div id="termsModal" class="modal">
     <div class="modal-content">
       <span class="close" id="closeModal">&times;</span>
@@ -260,45 +243,53 @@
       <h3>EVOSGPT Terms of Service, Privacy Policy & Refund Policy</h3>
 
       <h4 class="section-title">1. Acceptance of Terms</h4>
-      <p>By creating an EVOSGPT account, you agree to follow all terms listed here.</p>
+      <p>By creating an EVOSGPT account, you agree to follow all terms listed here. Updates may occur at any time.</p>
 
       <h4 class="section-title">2. General Usage</h4>
       <ul>
         <li>No illegal activities</li>
-        <li>No harmful content</li>
-        <li>No fraud</li>
+        <li>No harmful or fraudulent content</li>
+        <li>No hacking or reverse-engineering</li>
+        <li>No automated abuse</li>
       </ul>
 
-      <button class="agree-btn" id="agreeClose">Agree & Continue</button>
+      <h4 class="section-title">3. EVOSToken Policy</h4>
+      <p>Tokens have no monetary value and cannot be sold or withdrawn.</p>
+
+      <h4 class="section-title">4. Paid Tiers</h4>
+      <ul>
+        <li>Core – $1</li>
+        <li>Pro – $5</li>
+        <li>King – $9</li>
+      </ul>
+
+      <h4 class="section-title">5. Refund Policy</h4>
+      <p>Refunds only apply to failed activations or duplicate payments.</p>
+
+      <h4 class="section-title">6. Referral System</h4>
+      <p>Fraudulent referrals lead to suspension.</p>
+
+      <h4 class="section-title">7. Privacy Policy</h4>
+      <p>We collect minimal data and NEVER sell personal information.</p>
+
+      <h4 class="section-title">8. Account Security</h4>
+      <p>Users are responsible for safeguarding their passwords.</p>
+
+      <h4 class="section-title">9. Service Availability</h4>
+      <p>EVOSGPT may undergo maintenance occasionally.</p>
+
+      <button class="agree-btn" id="agreeClose">Agree & Close</button>
     </div>
   </div>
-
-  <!-- OAUTH POPUP -->
-  <div id="oauthModal" class="oauth-modal">
-    <div class="oauth-box">
-
-      <h3 style="color: var(--primary-color); margin-top:0;">Sign Up With</h3>
-
-      <button class="oauth-btn google-btn" onclick="oauthLogin('google')">Google</button>
-      <button class="oauth-btn discord-btn" onclick="oauthLogin('discord')">Discord</button>
-      <button class="oauth-btn facebook-btn" onclick="oauthLogin('facebook')">Facebook</button>
-      <button class="oauth-btn apple-btn" onclick="oauthLogin('apple')">Apple</button>
-
-      <br>
-      <button class="small-oauth-btn" id="closeOAuth">Close</button>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <script>
-    /* THEME */
+    /** Theme Setup **/
     const savedTheme = localStorage.getItem("theme");
     if (savedTheme) document.body.setAttribute("data-theme", savedTheme);
     else if (window.matchMedia("(prefers-color-scheme: dark)").matches)
       document.body.setAttribute("data-theme", "dark");
 
-    /* TERMS MODAL */
+    /** Modal Logic **/
     const modal = document.getElementById("termsModal");
     const openTerms = document.getElementById("openTerms");
     const openPrivacy = document.getElementById("openPrivacy");
@@ -310,6 +301,7 @@
       (modal.style.display = "flex");
 
     closeModal.onclick = () => (modal.style.display = "none");
+
     agreeClose.onclick = () => {
       modal.style.display = "none";
       document.getElementById("agree_terms").checked = true;
@@ -317,34 +309,13 @@
 
     window.onclick = (e) => {
       if (e.target === modal) modal.style.display = "none";
-      if (e.target === oauthModal) oauthModal.style.display = "none";
     };
 
-    /* OAUTH POPUP */
-    const oauthModal = document.getElementById("oauthModal");
-    document.getElementById("openOAuth").onclick = () => oauthModal.style.display = "flex";
-    document.getElementById("closeOAuth").onclick = () => oauthModal.style.display = "none";
-
-    /* SUPABASE */
-    const supabase = supabase.createClient(
-      "https://ttcavdmgylcxmzdijcsx.supabase.co",
-      "sys1q0zg3clqajs04p2yhkgf96nf4hmup9mdr8l38u6"
-    );
-
-    async function oauthLogin(provider) {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: "https://evosgpt.xyz/oauth/callback" }
-      });
-
-      if (error) alert("OAuth Error: " + error.message);
-    }
-
-    /* VALIDATION */
+    /** Validation **/
     document.getElementById("registerForm").addEventListener("submit", (e) => {
       if (!document.getElementById("agree_terms").checked) {
         e.preventDefault();
-        alert("Please agree to the Terms before continuing.");
+        alert("Please agree to the Terms, Privacy, and Refund Policy before continuing.");
       }
     });
   </script>
