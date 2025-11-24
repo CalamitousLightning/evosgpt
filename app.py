@@ -792,24 +792,35 @@ def _openrouter_chat(user_prompt: str, model: str = "openrouter/auto", system_pr
 
 
 # ---------- IMAGE GENERATION ----------
+# ---------- IMAGE GENERATION ----------
 def generate_image(prompt: str, tier: str = "Basic") -> Optional[str]:
-    """
-    Generate an image based on the prompt using OpenAI Image API.
-    Returns a URL (if web-hosted) or base64 data.
-    """
     try:
         if not OPENAI_API_KEY:
             return None
 
         tier = tier.capitalize().strip()
-        model = "gpt-image-1" if tier in ["Pro", "King", "Founder"] else "gpt-image-1-mini"
-        size = "1024x1024" if tier in ["King", "Founder"] else "512x512"
 
-        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
-        data = {"model": model, "prompt": prompt, "size": size}
+        # Only one image model exists; no mini version
+        model = "gpt-image-1"
 
-        resp = requests.post("https://api.openai.com/v1/images/generations",
-                             headers=headers, json=data, timeout=40)
+        # Use a higher size for top tiers
+        size = "1024x1024" if tier in ["King", "Founder"] else "auto"
+
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "model": model,
+            "prompt": prompt,
+            "size": size
+        }
+
+        resp = requests.post(
+            "https://api.openai.com/v1/images/generations",
+            headers=headers, json=data, timeout=40
+        )
 
         if resp.status_code == 200:
             data = resp.json()["data"][0]
@@ -817,13 +828,15 @@ def generate_image(prompt: str, tier: str = "Basic") -> Optional[str]:
                 return data["url"]
             if "b64_json" in data:
                 return f"data:image/png;base64,{data['b64_json']}"
-        else:
-            log_suspicious("ImageGenError", f"Status {resp.status_code}: {resp.text[:150]}")
-            return None
+
+        log_suspicious("ImageGenError",
+                       f"Status {resp.status_code}: {resp.text[:150]}")
+        return None
 
     except Exception as e:
         log_suspicious("ImageGenError", str(e))
         return None
+
 
 
 # ---------- MODEL WRAPPERS ----------
@@ -842,7 +855,7 @@ def gpt4o_mini(prompt: str, system_prompt: str = "") -> str:
 
 def gpt4o(prompt: str, system_prompt: str = "") -> str:
     return _openai_chat(prompt, "gpt-4o", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-4", system_prompt) \
+        or _openrouter_chat(prompt, "openai/gpt-4o", system_prompt) \
         or local_llm(f"{system_prompt}\n{prompt}") \
         or f"[4o-Echo] {prompt}"
 
@@ -2981,5 +2994,6 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
