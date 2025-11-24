@@ -1302,6 +1302,7 @@ def chat():
                 "reply": "⚠ You have 4 free chat left. Please register or log in to continue."
             })
 
+  
     # --- Founder unlock sequence ---
     if "user_id" in session:
         seq = session.get("founder_seq", 0)
@@ -1338,10 +1339,55 @@ def chat():
             if seq > 0 and ui not in ["evosgpt where you created", "ghanaherewecome", "nameless"]:
                 session["founder_seq"] = 0
 
+
+    # ---------- Load Last 20 Messages as Context ----------
+    context = ""
+    try:
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
+
+        if "user_id" in session:
+            uid = session["user_id"]
+            c.execute("""
+                SELECT user_input, bot_response
+                FROM (
+                    SELECT id, user_input, bot_response
+                    FROM memory
+                    WHERE system_msg = 0 AND user_id = ?
+                    ORDER BY id DESC
+                    LIMIT 20
+                ) sub
+                ORDER BY id ASC
+            """, (uid,))
+        else:
+            gid = session.get("guest_id")
+            c.execute("""
+                SELECT user_input, bot_response
+                FROM (
+                    SELECT id, user_input, bot_response
+                    FROM memory
+                    WHERE system_msg = 0 AND guest_id = ?
+                    ORDER BY id DESC
+                    LIMIT 20
+                ) sub
+                ORDER BY id ASC
+            """, (gid,))
+
+        rows = c.fetchall()
+        conn.close()
+
+        for u, b in rows:
+            context += f"User: {u}\nBot: {b}\n"
+
+    except Exception as e:
+        log_suspicious("ContextLoadError", str(e))
+        context = ""
+
+
     # --- AI Router ---
     if reply is None:
         try:
-            raw_reply = route_ai_call(tier, user_msg)
+            raw_reply = route_ai_call(tier, context + "\nUser: " + user_msg)
             reply = auto_paragraph(raw_reply)
         except Exception as e:
             log_suspicious("LLMError", str(e))
@@ -1351,6 +1397,7 @@ def chat():
 • Input received:  
 
 > {user_msg}"""
+
 
     # --- Save chat ---
     try:
@@ -2934,4 +2981,5 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
