@@ -856,11 +856,13 @@ def gpt5(prompt: str, system_prompt: str = "") -> str:
 
 
 # ---------- ROUTER ----------
-def route_ai_call(tier: str, prompt: str) -> str:
+def route_ai_call(tier: str, prompt: str, chat_history=None) -> str:
     """
     Smart tier-based routing system for EVOSGPT.
     Auto-detects image requests and routes to generate_image().
+    Accepts chat_history for memory continuity.
     """
+    chat_history = chat_history or []  # ensure list
     tier = tier.capitalize().strip()
     system_msg = build_system_prompt(tier)
 
@@ -875,13 +877,23 @@ def route_ai_call(tier: str, prompt: str) -> str:
             return f"🖼️ **Image Generated Successfully**\n\n{img_url}"
         return "⚠️ Image generation failed. Please try again later."
 
+    # ---------- NEW: Build message chain ----------
+    messages = [{"role": "system", "content": system_msg}]
+    messages.extend(chat_history)  # <-- memory inserted here
+    messages.append({"role": "user", "content": prompt})
+
+    # Internal selector
     def _try_chain(options):
         for label, fn in options:
             try:
                 if fn == local_llm:
-                    reply = fn(f"{system_msg}\n{prompt}")
+                    reply = fn("\n".join([m["content"] for m in messages]))
                 else:
-                    reply = fn(prompt, system_prompt=system_msg)
+                    reply = fn(
+                        prompt,
+                        system_prompt=system_msg,
+                        chat_history=chat_history  # <-- forwarded safely
+                    )
             except Exception as e:
                 log_suspicious("RouteError", f"{label}: {str(e)}")
                 reply = None
@@ -896,7 +908,7 @@ def route_ai_call(tier: str, prompt: str) -> str:
 • I couldn’t reach any AI models.  
 • Here’s what you sent me:  
 
-> {prompt}
+> {prompt}"""
 
 _Tip: Please retry in a moment._"""
 
@@ -1338,10 +1350,43 @@ def chat():
             if seq > 0 and ui not in ["evosgpt where you created", "ghanaherewecome", "nameless"]:
                 session["founder_seq"] = 0
 
+    # --- LOAD MEMORY (NEW) ---
+    chat_history = []
+    try:
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
+
+        if "user_id" in session:
+            uid = session["user_id"]
+            c.execute("""
+                SELECT user_input, bot_response
+                FROM memory
+                WHERE user_id = ? AND system_msg = 0
+                ORDER BY id ASC
+            """, (uid,))
+        else:
+            c.execute("""
+                SELECT user_input, bot_response
+                FROM memory
+                WHERE guest_id = ? AND system_msg = 0
+                ORDER BY id ASC
+            """, (guest_id,))
+
+        rows = c.fetchall()
+        conn.close()
+
+        for u, b in rows:
+            chat_history.append({"role": "user", "content": u})
+            chat_history.append({"role": "assistant", "content": b})
+
+    except Exception as e:
+        log_suspicious("MemoryLoadFail", str(e))
+
     # --- AI Router ---
     if reply is None:
         try:
-            raw_reply = route_ai_call(tier, user_msg)
+            # PASS HISTORY INTO AI CALL (NEW)
+            raw_reply = route_ai_call(tier, user_msg, chat_history)
             reply = auto_paragraph(raw_reply)
         except Exception as e:
             log_suspicious("LLMError", str(e))
@@ -1366,7 +1411,7 @@ def chat():
             conn.commit()
             enforce_memory_limit(uid, tier)
 
-            # ✅ NEW: Update user's chat and word count for EvosToken tracking
+            # Update user stats
             word_count = len(user_msg.split())
             c.execute("""
                 UPDATE users
@@ -1388,6 +1433,7 @@ def chat():
         log_suspicious("ChatInsertFail", str(e))
 
     return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
+
 
 
 # ---------- CHAT JOB RESULT ----------
@@ -2934,6 +2980,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
