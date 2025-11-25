@@ -741,7 +741,6 @@ def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
 
 # ---------- OPENAI + OPENROUTER WRAPPERS ----------
 def _openai_chat(user_prompt: str, model: str, system_prompt: str = "") -> Optional[str]:
-    """Try OpenAI; return None if quota/connection fails."""
     try:
         if not OPENAI_API_KEY:
             return None
@@ -764,7 +763,6 @@ def _openai_chat(user_prompt: str, model: str, system_prompt: str = "") -> Optio
 
 
 def _openrouter_chat(user_prompt: str, model: str = "openrouter/auto", system_prompt: str = "") -> Optional[str]:
-    """Fallback to OpenRouter (free/community LLMs)."""
     try:
         if not OPENROUTER_API_KEY:
             return None
@@ -791,52 +789,13 @@ def _openrouter_chat(user_prompt: str, model: str = "openrouter/auto", system_pr
         return None
 
 
-# ---------- IMAGE GENERATION ----------
-# ---------- IMAGE GENERATION ----------
+# ---------- IMAGE GENERATION (DISABLED FOR NOW) ----------
 def generate_image(prompt: str, tier: str = "Basic") -> Optional[str]:
-    try:
-        if not OPENAI_API_KEY:
-            return None
-
-        tier = tier.capitalize().strip()
-
-        # Only one image model exists; no mini version
-        model = "gpt-image-1"
-
-        # Use a higher size for top tiers
-        size = "1024x1024" if tier in ["King", "Founder"] else "auto"
-
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        data = {
-            "model": model,
-            "prompt": prompt,
-            "size": size
-        }
-
-        resp = requests.post(
-            "https://api.openai.com/v1/images/generations",
-            headers=headers, json=data, timeout=40
-        )
-
-        if resp.status_code == 200:
-            data = resp.json()["data"][0]
-            if "url" in data:
-                return data["url"]
-            if "b64_json" in data:
-                return f"data:image/png;base64,{data['b64_json']}"
-
-        log_suspicious("ImageGenError",
-                       f"Status {resp.status_code}: {resp.text[:150]}")
-        return None
-
-    except Exception as e:
-        log_suspicious("ImageGenError", str(e))
-        return None
-
+    """
+    Image generation is temporarily disabled for EVOSGPT v0.
+    Always returns None so the router will NOT trigger image creation.
+    """
+    return None
 
 
 # ---------- MODEL WRAPPERS ----------
@@ -861,7 +820,6 @@ def gpt4o(prompt: str, system_prompt: str = "") -> str:
 
 
 def gpt5(prompt: str, system_prompt: str = "") -> str:
-    """Simulate GPT-5 route with fallback to GPT-4o if unavailable."""
     return _openai_chat(prompt, "gpt-5", system_prompt) \
         or _openrouter_chat(prompt, "openai/gpt-5", system_prompt) \
         or gpt4o(prompt, system_prompt) \
@@ -870,23 +828,12 @@ def gpt5(prompt: str, system_prompt: str = "") -> str:
 
 # ---------- ROUTER ----------
 def route_ai_call(tier: str, prompt: str) -> str:
-    """
-    Smart tier-based routing system for EVOSGPT.
-    Auto-detects image requests and routes to generate_image().
-    """
     tier = tier.capitalize().strip()
     system_msg = build_system_prompt(tier)
 
-    # Auto-detect image requests
-    image_triggers = [
-        r"\b(generate|create|make|draw|show|design)\b.*\b(image|picture|photo|art|logo|mockup|visual)\b",
-        r"\b(render|illustrate|sketch|visualize)\b",
-    ]
-    if any(re.search(pat, prompt.lower()) for pat in image_triggers):
-        img_url = generate_image(prompt, tier)
-        if img_url:
-            return f"🖼️ **Image Generated Successfully**\n\n{img_url}"
-        return "⚠️ Image generation failed. Please try again later."
+    # 🔥 Image detection block disabled
+    if False:
+        pass
 
     def _try_chain(options):
         for label, fn in options:
@@ -2994,6 +2941,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
