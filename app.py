@@ -2712,17 +2712,25 @@ def _upgrade_user(user_id: int, tier: str, days: int = 30):
 def webhook_paystack():
     raw = request.get_data() or b""
     sent_sig = request.headers.get("X-Paystack-Signature", "")
-    secret = os.getenv("PAYSTACK_SECRET", "")
+    secret = os.getenv("PAYSTACK_SECRET", "")   # ✔ your .env uses PAYSTACK_SECRET
 
+    # Basic checks
     if not sent_sig or not secret:
         print("⚠️ Paystack webhook missing signature or secret.")
         return jsonify({"status": "invalid-signature"}), 400
 
-    expected = hmac.new(secret.encode("utf-8"), raw, hashlib.sha512).hexdigest()
+    # Validate signature
+    try:
+        expected = hmac.new(secret.encode("utf-8"), raw, hashlib.sha512).hexdigest()
+    except Exception as e:
+        print("⚠️ HMAC error:", e)
+        return jsonify({"status": "invalid-hmac"}), 400
+
     if not compare_digest(sent_sig, expected):
         print("⚠️ Invalid Paystack signature.")
         return jsonify({"status": "invalid-signature"}), 400
 
+    # Parse JSON
     payload = _safe_parse_json(raw)
     if not payload:
         print("⚠️ Invalid Paystack JSON payload.")
@@ -2733,7 +2741,7 @@ def webhook_paystack():
 
     data = payload.get("data", {}) or {}
     reference = data.get("reference", "")
-    meta = data.get("metadata", {})
+    meta = data.get("metadata", {}) or {}
 
     # Extract user ID safely
     try:
@@ -2747,16 +2755,23 @@ def webhook_paystack():
         print("⚠️ Paystack bad metadata:", meta)
         return jsonify({"status": "bad-metadata"}), 400
 
-    # 💰 Validate amount (tolerance)
-    paid_amount = data.get("amount", 0) / 100  # pesewas → GHS
-    expected_amount = TIER_PRICE_USD[tier] * EXCHANGE_RATES["GHS"]
+    # 💰 Validate amount
+    try:
+        paid_amount = data.get("amount", 0) / 100   # pesewas → GHS
+        expected_amount = TIER_PRICE_USD[tier] * EXCHANGE_RATES["GHS"]
+    except Exception as e:
+        print("⚠️ Amount validation error:", e)
+        return jsonify({"status": "amount-error"}), 400
+
     if abs(paid_amount - expected_amount) > 0.5:
         print(f"⚠️ Paystack amount mismatch: {paid_amount} vs {expected_amount}")
         return jsonify({"status": "amount-mismatch"}), 400
 
+    # Duplicate reference check
     if _purchases_ref_exists(reference):
         return jsonify({"status": "ok"}), 200
 
+    # Save purchase
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
@@ -2770,8 +2785,10 @@ def webhook_paystack():
         print("⚠️ Paystack DB error:", e)
         return jsonify({"status": "db-error"}), 500
 
+    # Upgrade the user
     _upgrade_user(user_id, tier)
     print(f"✅ User {user_id} upgraded via Paystack → {tier}")
+
     return jsonify({"status": "ok"}), 200
 
 
@@ -2788,7 +2805,6 @@ def set_security_headers(resp):
     )
     return resp
 
-
 # --- COINBASE WEBHOOK ---
 @app.route("/webhook/coinbase", methods=["POST"])
 def webhook_coinbase():
@@ -2800,6 +2816,7 @@ def webhook_coinbase():
         print("⚠️ Coinbase webhook missing signature or secret.")
         return jsonify({"status": "invalid"}), 400
 
+    # Verify Coinbase signature
     mac = hmac.new(secret.encode("utf-8"), raw, hashlib.sha256).hexdigest()
     if not compare_digest(sig, mac):
         print("⚠️ Coinbase invalid signature.")
@@ -2813,6 +2830,7 @@ def webhook_coinbase():
     event = payload.get("event", {}) or {}
     event_type = event.get("type", "")
 
+    # Only accept successful crypto payments
     if event_type not in {"charge:confirmed", "charge:resolved"}:
         return jsonify({"status": "ignored"}), 200
 
@@ -2820,6 +2838,7 @@ def webhook_coinbase():
     meta = data.get("metadata", {}) or {}
     reference = data.get("code") or ""
 
+    # Extract user ID
     try:
         user_id = int(meta.get("user_id"))
     except Exception:
@@ -2831,6 +2850,21 @@ def webhook_coinbase():
         print("⚠️ Coinbase bad metadata:", meta)
         return jsonify({"status": "bad-metadata"}), 400
 
+    # ---- OPTIONAL AMOUNT VALIDATION ----
+    # Coinbase sends payments in crypto; this checks the local pricing object if present
+    pricing = data.get("pricing", {})
+    local = pricing.get("local", {})
+    paid_amount = float(local.get("amount", 0)) if local else 0.0
+
+    # Compare with expected USD price
+    expected_amount = TIER_PRICE_USD[tier]
+
+    # Allow ± $0.50 tolerance
+    if paid_amount and abs(paid_amount - expected_amount) > 0.50:
+        print(f"⚠️ Coinbase amount mismatch: {paid_amount} vs {expected_amount}")
+        return jsonify({"status": "amount-mismatch"}), 400
+
+    # Prevent duplicate purchases
     if _purchases_ref_exists(reference):
         return jsonify({"status": "ok"}), 200
 
@@ -2852,23 +2886,31 @@ def webhook_coinbase():
     return jsonify({"status": "ok"}), 200
 
 
+
 # ---------- UPGRADE SUCCESS ----------
 @app.route("/upgrade_success")
 def upgrade_success():
-    """Callback page shown after successful payment from Paystack or Coinbase."""
+    """
+    Callback page shown after a successful payment
+    from Paystack or Coinbase.
+    """
     if "user_id" not in session:
-        flash("⚠️ You must be logged in.")
+        flash("⚠️ You must be logged in to view this page.")
         return redirect(url_for("login"))
 
-    # Retrieve payment reference (if provided by Paystack)
-    ref = request.args.get("reference", "unknown")
+    # Payment reference sent by Paystack (optional for Coinbase)
+    reference = request.args.get("reference", None)
 
-    # Notify user and log
-    flash("✅ Payment successful! Your upgrade will be applied shortly.")
-    print(f"[DEBUG] Payment success callback received. Reference: {ref}")
+    if reference:
+        print(f"[PAYMENT CALLBACK] Success. Reference received: {reference}")
+    else:
+        print("[PAYMENT CALLBACK] Success with no reference provided.")
 
-    # Redirect to home or dashboard
+    flash("✅ Payment successful! Your upgrade is being applied.")
+
+    # Always redirect user back to home/dashboard
     return redirect(url_for("index"))
+
 
 
 @app.errorhandler(404)
@@ -2941,6 +2983,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
