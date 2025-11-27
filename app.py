@@ -2976,6 +2976,13 @@ def fix_sql_placeholders():
 # Run the fix (uncomment this line to execute immediately when app.py runs)
 # fix_sql_placeholders()
 
+@app.route("/robots.txt")
+def robots():
+    return send_from_directory("static", "robots.txt")
+
+@app.route("/sitemap.xml")
+def sitemap():
+    return send_from_directory("static", "sitemap.xml")
 
 # ---------- Run app ----------
 if __name__ == "__main__":
@@ -2983,6 +2990,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
