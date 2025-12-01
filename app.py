@@ -2976,15 +2976,56 @@ def fix_sql_placeholders():
 # Run the fix (uncomment this line to execute immediately when app.py runs)
 # fix_sql_placeholders()
 
-from flask import send_from_directory
+from flask import Response
 
-@app.route('/robots.txt')
-def robots():
-    return send_from_directory('.', 'robots.txt')
-
-@app.route('/sitemap.xml')
+@app.route("/sitemap.xml", methods=["GET"])
 def sitemap():
-    return send_from_directory('.', 'sitemap.xml')
+    sitemap_xml = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+    <url>
+        <loc>https://evosgpt.xyz/</loc>
+        <priority>1.0</priority>
+        <changefreq>daily</changefreq>
+    </url>
+
+    <url>
+        <loc>https://evosgpt.xyz/login</loc>
+        <priority>0.8</priority>
+        <changefreq>weekly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://evosgpt.xyz/register</loc>
+        <priority>0.8</priority>
+        <changefreq>weekly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://evosgpt.xyz/upgrade</loc>
+        <priority>0.8</priority>
+        <changefreq>weekly</changefreq>
+    </url>
+
+    <url>
+        <loc>https://evosgpt.xyz/chat</loc>
+        <priority>0.6</priority>
+        <changefreq>hourly</changefreq>
+    </url>
+
+</urlset>"""
+
+    return Response(sitemap_xml, mimetype="application/xml")
+
+
+@app.route("/robots.txt")
+def robots():
+    robots_text = """User-agent: *
+Allow: /
+
+Sitemap: https://evosgpt.xyz/sitemap.xml
+"""
+    return Response(robots_text, mimetype="text/plain")
 
 
 
@@ -2994,6 +3035,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
