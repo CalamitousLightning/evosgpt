@@ -2792,19 +2792,32 @@ def webhook_paystack():
     return jsonify({"status": "ok"}), 200
 
 
+from flask import request
+
 @app.after_request
 def set_security_headers(resp):
+    # Always applied headers
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Paths that must NOT have strict CSP (Google needs these fully open)
+    sitemap_exceptions = {"/sitemap.xml", "/robots.txt"}
+
+    # If the request is for sitemap or robots, skip CSP entirely
+    if request.path in sitemap_exceptions:
+        return resp
+
+    # Strict CSP for everything else
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self' 'unsafe-inline' https://api.commerce.coinbase.com; "
         "img-src 'self' data: https:; "
         "connect-src 'self' https://api.openai.com https://api.commerce.coinbase.com https://api.paystack.co http://localhost:11434; "
         "frame-ancestors 'none';"
     )
-    return resp
 
+    return resp
+    
 # --- COINBASE WEBHOOK ---
 @app.route("/webhook/coinbase", methods=["POST"])
 def webhook_coinbase():
@@ -3035,6 +3048,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
