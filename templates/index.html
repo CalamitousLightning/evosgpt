@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Canonical — fixes your HTTP/HTTPS issue -->
+    <!-- Canonical — fixes HTTP/HTTPS indexing -->
     <link rel="canonical" href="https://evosgpt.xyz/">
 
     <!-- SEO -->
@@ -14,14 +14,14 @@
 
     <!-- App identity -->
     <meta name="application-name" content="EVOSGPT">
-    <meta name="theme-color" content="#00d4ff">
+    <meta name="theme-color" content="#00d4ff"> <!-- You may change this -->
 
-    <!-- Google Search Essentials -->
+    <!-- Google search essentials -->
     <meta name="robots" content="index, follow">
     <meta name="googlebot" content="index, follow">
     <meta name="google" content="notranslate">
 
-    <!-- Open Graph for WhatsApp / Facebook -->
+    <!-- Open Graph -->
     <meta property="og:title" content="EVOSGPT — Designed to Evolve">
     <meta property="og:description" content="Experience a fast, secure, and evolving AI designed for you.">
     <meta property="og:url" content="https://evosgpt.xyz/">
@@ -34,30 +34,29 @@
     <meta name="twitter:description" content="Next-level AI chat built with speed, security, and evolution.">
     <meta name="twitter:image" content="https://evosgpt.xyz/static/images/evosgpticon.png">
 
-  <!-- Favicon -->
-<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/evosgpticon.png') }}">
-<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/evosgpticon.png') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
 
-<!-- Apple Touch Icon (for iOS and Google search images) -->
-<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+    <!-- Manifest -->
+    <link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
 
-<!-- Web Manifest (Google strongly requires this for site icon) -->
-<link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+    <!-- Schema.org -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "EVOSGPT",
+      "url": "https://evosgpt.xyz/",
+      "logo": "https://evosgpt.xyz/static/images/evosgpticon.png"
+    }
+    </script>
 
-<!-- Theme colors -->
-<meta name="theme-color" content="#000000">
-<meta name="msapplication-TileColor" content="#000000">
+    <!-- JS dependencies -->
+    <script src="{{ url_for('static', filename='js/marked.min.js') }}"></script>
 
-<!-- Schema.org (helps Google show brand icon + profile) -->
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "Organization",
-  "name": "EVOSGPT",
-  "url": "https://evosgpt.xyz/",
-  "logo": "https://evosgpt.xyz/static/images/evosgpticon.png"
-}
-</script>
+    
   
   <style>
     :root {
@@ -600,6 +599,7 @@
   </script>
 </body>
 </html>
+
 
 
 
