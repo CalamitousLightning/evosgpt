@@ -34,10 +34,22 @@
     <meta name="twitter:description" content="Next-level AI chat built with speed, security, and evolution.">
     <meta name="twitter:image" content="https://evosgpt.xyz/static/images/evosgpticon.png">
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/evosgpticon.png') }}">
-    <!-- Your scripts -->
-   <script type="application/ld+json">
+  <!-- Favicon -->
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/evosgpticon.png') }}">
+<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+
+<!-- Apple Touch Icon (for iOS and Google search images) -->
+<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+
+<!-- Web Manifest (Google strongly requires this for site icon) -->
+<link rel="manifest" href="{{ url_for('static', filename='site.webmanifest') }}">
+
+<!-- Theme colors -->
+<meta name="theme-color" content="#000000">
+<meta name="msapplication-TileColor" content="#000000">
+
+<!-- Schema.org (helps Google show brand icon + profile) -->
+<script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "Organization",
@@ -588,6 +600,7 @@
   </script>
 </body>
 </html>
+
 
 
 
