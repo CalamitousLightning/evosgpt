@@ -1,14 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="EVOSGPT — Built for You, Designed to Evolve. Smart, Secure, and Evolving Chat AI." />
-  <title>EVOSGPT</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/evosgpt-icon.png') }}">
-  <script src="{{ url_for('static', filename='js/marked.min.js') }}"></script>
+    <!-- Canonical — fixes your HTTP/HTTPS issue -->
+    <link rel="canonical" href="https://evosgpt.xyz/">
 
+    <!-- SEO -->
+    <title>EVOSGPT — Built for You, Designed to Evolve</title>
+    <meta name="description" content="EVOSGPT — Smart, secure, evolving AI chat system. Built for You, Designed to Evolve." />
+    <meta name="keywords" content="EVOSGPT, AI chat, evolving AI, secure AI, Africa AI, EVOS, S.O.E phone, Besah Deladem Etornam">
+
+    <!-- App identity -->
+    <meta name="application-name" content="EVOSGPT">
+    <meta name="theme-color" content="#00d4ff">
+
+    <!-- Google Search Essentials -->
+    <meta name="robots" content="index, follow">
+    <meta name="googlebot" content="index, follow">
+    <meta name="google" content="notranslate">
+
+    <!-- Open Graph for WhatsApp / Facebook -->
+    <meta property="og:title" content="EVOSGPT — Designed to Evolve">
+    <meta property="og:description" content="Experience a fast, secure, and evolving AI designed for you.">
+    <meta property="og:url" content="https://evosgpt.xyz/">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://evosgpt.xyz/static/images/evosgpticon.png">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="EVOSGPT — Designed to Evolve">
+    <meta name="twitter:description" content="Next-level AI chat built with speed, security, and evolution.">
+    <meta name="twitter:image" content="https://evosgpt.xyz/static/images/evosgpticon.png">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/evosgpticon.png') }}">
+    <!-- Your scripts -->
+    <script src="{{ url_for('static', filename='js/marked.min.js') }}"></script>
+  
   <style>
     :root {
       --bg-color: #f5f7fa;
@@ -550,6 +580,7 @@
   </script>
 </body>
 </html>
+
 
 
 
