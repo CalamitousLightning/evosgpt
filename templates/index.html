@@ -37,7 +37,15 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/evosgpticon.png') }}">
     <!-- Your scripts -->
-    <script src="{{ url_for('static', filename='js/marked.min.js') }}"></script>
+   <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "EVOSGPT",
+  "url": "https://evosgpt.xyz/",
+  "logo": "https://evosgpt.xyz/static/images/evosgpticon.png"
+}
+</script>
   
   <style>
     :root {
@@ -580,6 +588,7 @@
   </script>
 </body>
 </html>
+
 
 
 
