@@ -1474,6 +1474,10 @@ def clear_memory():
     return redirect(url_for("index"))
 
 
+@app.route("/about")
+def about():
+    return render_template("about.html")
+
     # ---------- BEFORE REQUEST HOOKS ----------
     @app.before_request
     def refresh_user_session():
@@ -3052,6 +3056,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
