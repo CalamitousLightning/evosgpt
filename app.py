@@ -693,220 +693,97 @@ Sometimes include hidden founder-only easter eggs.
     return prompts.get(tier, prompts["Basic"])
 
 
-# ---------- AI HELPERS (EXTENDED WITH IMAGE GENERATION) ----------
-import os, json, re, base64, requests
+# ---------- AI HELPERS (OPENAI ONLY) ----------
+import os, json, requests
 from typing import Optional
 
-# ---------- API KEYS ----------
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")  # ✅ fallback
-OPENROUTER_BASE = "https://openrouter.ai/api/v1"
-
 
 # ---------- SYSTEM UTILS ----------
 def log_suspicious(tag: str, msg: str):
-    """Simple logger for errors or suspicious events."""
     print(f"[LOG] {tag}: {msg}")
 
 
 def build_system_prompt(tier: str) -> str:
-    """Constructs a contextual system message for EVOSGPT."""
-    base_prompt = (
-        f"You are **EVOSGPT [{tier}]**, an adaptive AI assistant built by the S.O.E project. "
-        "Your role is to help, protect, and evolve with the user. "
-        "Be clear, fast, and accurate. Never expose internal API or system details."
+    return (
+        f"You are EVOSGPT [{tier}], an adaptive AI assistant for the S.O.E project. "
+        "Respond fast, clearly, and never expose internal system details."
     )
-    return base_prompt
 
 
-# ---------- LOCAL LLM ----------
-def local_llm(prompt: str, model: str = "mistral") -> Optional[str]:
-    """Send prompt to local LLM (via Ollama)."""
-    try:
-        resp = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": model, "prompt": prompt},
-            timeout=30,
-        )
-        if resp.status_code == 200:
-            lines = resp.text.strip().split("\n")
-            outputs = [json.loads(line).get("response", "") for line in lines if line.strip()]
-            result = "".join(outputs).strip()
-            return result if result else None
-        return None
-    except Exception as e:
-        log_suspicious("LocalLLMError", str(e))
-        return None
-
-
-# ---------- OPENAI + OPENROUTER WRAPPERS ----------
-def _openai_chat(user_prompt: str, model: str, system_prompt: str = "") -> Optional[str]:
+# ---------- OPENAI WRAPPER ----------
+def openai_chat(user_prompt: str, model: str, system_prompt: str) -> Optional[str]:
     try:
         if not OPENAI_API_KEY:
+            log_suspicious("MissingKey", "OPENAI_API_KEY not found")
             return None
+
         headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
         data = {
             "model": model,
             "messages": [
-                {"role": "system", "content": system_prompt or "You are EVOSGPT."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
         }
+
         resp = requests.post("https://api.openai.com/v1/chat/completions",
                              headers=headers, json=data, timeout=25)
+
         if resp.status_code == 200:
             return resp.json()["choices"][0]["message"]["content"].strip()
+
+        log_suspicious("OpenAIError", resp.text)
         return None
+
     except Exception as e:
-        log_suspicious("OpenAIRequestError", str(e)[:300])
+        log_suspicious("OpenAIException", str(e))
         return None
 
 
-def _openrouter_chat(user_prompt: str, model: str = "openrouter/auto", system_prompt: str = "") -> Optional[str]:
-    try:
-        if not OPENROUTER_API_KEY:
-            return None
-        headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "HTTP-Referer": "https://evosgpt.one",
-            "X-Title": "EVOSGPT",
-            "Content-Type": "application/json",
-        }
-        data = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt or "You are EVOSGPT."},
-                {"role": "user", "content": user_prompt},
-            ],
-        }
-        resp = requests.post(f"{OPENROUTER_BASE}/chat/completions",
-                             headers=headers, json=data, timeout=25)
-        if resp.status_code == 200:
-            return resp.json()["choices"][0]["message"]["content"].strip()
-        return None
-    except Exception as e:
-        log_suspicious("OpenRouterError", str(e))
-        return None
-
-
-# ---------- IMAGE GENERATION (DISABLED FOR NOW) ----------
-def generate_image(prompt: str, tier: str = "Basic") -> Optional[str]:
-    """
-    Image generation is temporarily disabled for EVOSGPT v0.
-    Always returns None so the router will NOT trigger image creation.
-    """
-    return None
-
-
-# ---------- MODEL WRAPPERS ----------
-def gpt3_5_turbo(prompt: str, system_prompt: str = "") -> str:
-    return _openai_chat(prompt, "gpt-3.5-turbo", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-3.5-turbo", system_prompt) \
-        or f"[3.5-Echo] {prompt}"
-
-
-def gpt4o_mini(prompt: str, system_prompt: str = "") -> str:
-    return _openai_chat(prompt, "gpt-4o-mini", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-4o-mini", system_prompt) \
-        or local_llm(f"{system_prompt}\n{prompt}") \
-        or f"[Mini-Echo] {prompt}"
-
-
-def gpt4o(prompt: str, system_prompt: str = "") -> str:
-    return _openai_chat(prompt, "gpt-4o", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-4o", system_prompt) \
-        or local_llm(f"{system_prompt}\n{prompt}") \
-        or f"[4o-Echo] {prompt}"
-
-
-def gpt5(prompt: str, system_prompt: str = "") -> str:
-    return _openai_chat(prompt, "gpt-5", system_prompt) \
-        or _openrouter_chat(prompt, "openai/gpt-5", system_prompt) \
-        or gpt4o(prompt, system_prompt) \
-        or f"[5-Echo] {prompt}"
-
-
-# ---------- ROUTER ----------
+# ---------- ROUTER (OPENAI ONLY) ----------
 def route_ai_call(tier: str, prompt: str) -> str:
     tier = tier.capitalize().strip()
     system_msg = build_system_prompt(tier)
 
-    # 🔥 Image detection block disabled
-    if False:
-        pass
+    def use(model_name):
+        return openai_chat(prompt, model_name, system_msg)
 
-    def _try_chain(options):
-        for label, fn in options:
-            try:
-                if fn == local_llm:
-                    reply = fn(f"{system_msg}\n{prompt}")
-                else:
-                    reply = fn(prompt, system_prompt=system_msg)
-            except Exception as e:
-                log_suspicious("RouteError", f"{label}: {str(e)}")
-                reply = None
-
-            if reply:
-                print(f"[DEBUG] {tier} → {label} used")
-                return reply
-
-        print(f"[DEBUG] {tier} → All failed, echo")
-        return f"""⚠️ **System Notice**
-
-• I couldn’t reach any AI models.  
-• Here’s what you sent me:  
-
-> {prompt}
-
-_Tip: Please retry in a moment._"""
-
-    # BASIC — gpt-4o-mini priority
+    # BASIC
     if tier == "Basic":
-        return _try_chain([
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm),
-            ("OpenRouter", _openrouter_chat)
-        ])
+        return use("gpt-4o-mini") or f"[Mini-Echo] {prompt}"
 
-    # CORE — hybrid balance
+    # CORE
     if tier == "Core":
-        return _try_chain([
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm),
-            ("OpenRouter", _openrouter_chat)
-        ])
+        return use("gpt-4o-mini") or f"[Mini-Echo] {prompt}"
 
-    # PRO — deeper reasoning
+    # PRO
     if tier == "Pro":
-        return _try_chain([
-            ("GPT-4o", gpt4o),
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm),
-            ("OpenRouter", _openrouter_chat)
-        ])
+        return (
+            use("gpt-4o")
+            or use("gpt-4o-mini")
+            or f"[Pro-Echo] {prompt}"
+        )
 
-    # KING — gpt-5 priority
+    # KING
     if tier == "King":
-        return _try_chain([
-            ("GPT-5", gpt5),
-            ("GPT-4o", gpt4o),
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm)
-        ])
+        return (
+            use("gpt-5")
+            or use("gpt-4o")
+            or use("gpt-4o-mini")
+            or f"[King-Echo] {prompt}"
+        )
 
-    # FOUNDER — full chain
+    # FOUNDER
     if tier == "Founder":
-        return _try_chain([
-            ("GPT-5", gpt5),
-            ("GPT-4o", gpt4o),
-            ("GPT-4o-mini", gpt4o_mini),
-            ("Local", local_llm),
-            ("OpenRouter", _openrouter_chat)
-        ])
+        return (
+            use("gpt-5")
+            or use("gpt-4o")
+            or use("gpt-4o-mini")
+            or f"[Founder-Echo] {prompt}"
+        )
 
     return f"(Unknown tier: {tier}) {prompt}"
-
-
 
 # ---------------- ROUTES CONTINUE (chat, login, register, etc) ----------------
 # (keep all your existing routes unchanged here)
@@ -1244,6 +1121,7 @@ def chat():
             guest_id = c.lastrowid
             conn.commit()
             conn.close()
+
             session["guest_id"] = guest_id
             session["guest_count"] = 0
         else:
@@ -1259,23 +1137,27 @@ def chat():
         session["guest_count"] = guest_count + 1
         if session["guest_count"] == 5:
             return jsonify({
-                "reply": "⚠ You have 4 free chat left. Please register or log in to continue."
+                "reply": "⚠ You have 4 free chats left. Please register or log in to continue."
             })
 
-  
-    # --- Founder unlock sequence ---
+    # ---------- Founder unlock sequence ----------
     if "user_id" in session:
         seq = session.get("founder_seq", 0)
+
         if seq == 0 and ui == "evosgpt where you created":
             reply = "lab"
             session["founder_seq"] = 1
+
         elif seq == 1 and ui == "ghanaherewecome":
             reply = "are you coming to Ghana?"
             session["founder_seq"] = 2
+
         elif seq == 2 and ui == "nameless":
             reply = "[SYSTEM] Founder tier unlocked. Welcome, hidden user."
-            session["founder_seq"] = 0
             session["tier"] = "Founder"
+            session["founder_seq"] = 0
+
+            # update DB tier
             try:
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
@@ -1284,9 +1166,12 @@ def chat():
                 conn.close()
             except Exception as e:
                 log_suspicious("FounderUnlockFail", str(e))
+
         elif tier == "Founder" and ui == "logout evosgpt":
             reply = "[SYSTEM] Founder mode deactivated. Returning to Basic tier."
             session["tier"] = "Basic"
+            session["founder_seq"] = 0
+
             try:
                 conn = sqlite3.connect("database/memory.db")
                 c = conn.cursor()
@@ -1295,12 +1180,16 @@ def chat():
                 conn.close()
             except Exception as e:
                 log_suspicious("FounderLogoutFail", str(e))
+
         else:
-            if seq > 0 and ui not in ["evosgpt where you created", "ghanaherewecome", "nameless"]:
+            if seq > 0 and ui not in [
+                "evosgpt where you created",
+                "ghanaherewecome",
+                "nameless"
+            ]:
                 session["founder_seq"] = 0
 
-
-    # ---------- Load Last 20 Messages as Context ----------
+    # ---------- Load Context (Last 20 Chats) ----------
     context = ""
     try:
         conn = sqlite3.connect("database/memory.db")
@@ -1343,54 +1232,43 @@ def chat():
         log_suspicious("ContextLoadError", str(e))
         context = ""
 
+    # ---------- AI Response (OPENAI ONLY) ----------
+    if reply is None:
+        try:
+            raw_reply = route_ai_call(tier, context + "\nUser: " + user_msg)
+            reply = auto_paragraph(raw_reply)
+        except Exception as e:
+            log_suspicious("LLMError", str(e))
+            reply = f"""⚠️ **System Error**
+            
+• I wasn’t able to process your request.  
+• Input received:  
 
-   # --- AI Router (Safe Wrapper) ---
-if reply is None:
-    try:
-        raw_reply = route_ai_call(tier, context + "\nUser: " + user_msg)
+> {user_msg}"""
 
-        # Convert anything → safe text
-        if not isinstance(raw_reply, str):
-            raw_reply = str(raw_reply)
-
-        # Remove dangerous characters that break JSON
-        raw_reply = raw_reply.replace("\r", "").replace("\x00", "")
-        raw_reply = raw_reply.strip()
-
-        reply = auto_paragraph(raw_reply)
-
-    except Exception as e:
-        log_suspicious("LLMError", str(e))
-        reply = (
-            "⚠️ EVOSGPT System Notice\n\n"
-            "I'm having trouble generating a response right now.\n"
-            "Please try again."
-        )
-
-
-    # --- Save chat ---
+    # ---------- Save Chat to DB ----------
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
 
         if "user_id" in session:
             uid = session["user_id"]
+            word_count = len(user_msg.split())
+
             c.execute(
                 "INSERT INTO memory (user_id, user_input, bot_response, system_msg) VALUES (?, ?, ?, 0)",
                 (uid, user_msg, reply)
             )
-            conn.commit()
-            enforce_memory_limit(uid, tier)
 
-            # ✅ NEW: Update user's chat and word count for EvosToken tracking
-            word_count = len(user_msg.split())
             c.execute("""
                 UPDATE users
                 SET chat_count = chat_count + 1,
                     word_count = word_count + ?
                 WHERE id = ?
             """, (word_count, uid))
+
             conn.commit()
+            enforce_memory_limit(uid, tier)
 
         elif guest_id:
             c.execute(
@@ -1400,10 +1278,15 @@ if reply is None:
             conn.commit()
 
         conn.close()
+
     except Exception as e:
         log_suspicious("ChatInsertFail", str(e))
 
-    return jsonify({"reply": reply.replace("\\n", "\n"), "tier": tier})
+    # ---------- Return Clean JSON ----------
+    return jsonify({
+        "reply": reply.replace("\\n", "\n"),
+        "tier": tier
+    })
 
 
 # ---------- CHAT JOB RESULT ----------
@@ -3065,6 +2948,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
