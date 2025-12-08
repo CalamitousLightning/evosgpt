@@ -1344,19 +1344,28 @@ def chat():
         context = ""
 
 
-    # --- AI Router ---
-    if reply is None:
-        try:
-            raw_reply = route_ai_call(tier, context + "\nUser: " + user_msg)
-            reply = auto_paragraph(raw_reply)
-        except Exception as e:
-            log_suspicious("LLMError", str(e))
-            reply = f"""⚠️ **System Error**
+   # --- AI Router (Safe Wrapper) ---
+if reply is None:
+    try:
+        raw_reply = route_ai_call(tier, context + "\nUser: " + user_msg)
 
-• I wasn’t able to process your request.  
-• Input received:  
+        # Convert anything → safe text
+        if not isinstance(raw_reply, str):
+            raw_reply = str(raw_reply)
 
-> {user_msg}"""
+        # Remove dangerous characters that break JSON
+        raw_reply = raw_reply.replace("\r", "").replace("\x00", "")
+        raw_reply = raw_reply.strip()
+
+        reply = auto_paragraph(raw_reply)
+
+    except Exception as e:
+        log_suspicious("LLMError", str(e))
+        reply = (
+            "⚠️ EVOSGPT System Notice\n\n"
+            "I'm having trouble generating a response right now.\n"
+            "Please try again."
+        )
 
 
     # --- Save chat ---
@@ -3056,6 +3065,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
