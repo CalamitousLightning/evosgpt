@@ -446,120 +446,7 @@
     <button type="submit">Send</button>
   </form>
 
-  <script>
-    const chatBox = document.getElementById("chat-box");
-    const textarea = document.getElementById("message");
-
-    function scrollToBottom() { chatBox.scrollTop = chatBox.scrollHeight; }
-
-    function saveChat() { localStorage.setItem("evos_chat_history", chatBox.innerHTML); }
-    function loadChat() {
-      const saved = localStorage.getItem("evos_chat_history");
-      if (saved) {
-        chatBox.innerHTML = saved;
-        adjustChatPadding();
-        scrollToBottom();
-      }
-    }
-    function clearChat() {
-      localStorage.removeItem("evos_chat_history");
-      chatBox.innerHTML = "";
-    }
-
-    loadChat();
-
-    document.getElementById("chat-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const text = textarea.value.trim();
-      if (!text) return;
-
-      chatBox.insertAdjacentHTML("beforeend", `<div class="msg user">${text}</div>`);
-      saveChat(); scrollToBottom();
-      textarea.value = ""; textarea.style.height = "40px"; adjustChatPadding();
-
-      const typing = document.createElement("div");
-      typing.className = "msg bot"; typing.id = "typing-bubble"; typing.innerText = "EVOSGPT is typing...";
-      chatBox.appendChild(typing); scrollToBottom();
-
-      try {
-        const res = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text })
-        });
-        const data = await res.json();
-        typing.remove();
-
-        let botContent = "";
-        if (data.image_url) {
-          botContent = `<img src="${data.image_url}" alt="Generated Image" style="max-width:100%; border-radius:10px; margin-top:8px;">`;
-        } else if (data.image_base64) {
-          botContent = `<img src="data:image/png;base64,${data.image_base64}" alt="Generated Image" style="max-width:100%; border-radius:10px; margin-top:8px;">`;
-        } else {
-          botContent = marked.parse(data.reply || "⚠ No reply from server.");
-        }
-
-        chatBox.insertAdjacentHTML("beforeend", `
-          <div class="msg bot">
-            <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
-            <div class="bot-content">${botContent}</div>
-            <button class="copy-btn" onclick="copyText(this)">📋</button>
-          </div>
-        `);
-        saveChat(); adjustChatPadding(); scrollToBottom();
-      } catch (err) {
-        typing.remove();
-        chatBox.insertAdjacentHTML("beforeend", `<div class="msg bot error">⚠ Error: ${err.message}</div>`);
-        saveChat();
-      }
-    });
-
-    textarea.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 768) {
-        e.preventDefault();
-        document.getElementById("chat-form").dispatchEvent(new Event("submit"));
-      }
-    });
-
-    function copyText(button) {
-      const text = button.parentElement.innerText.replace("📋", "").trim();
-      navigator.clipboard.writeText(text).then(() => {
-        button.textContent = "✅";
-        setTimeout(() => button.textContent = "📋", 1500);
-      });
-    }
-
-    function toggleSidebar() {
-      document.getElementById("sidebar").classList.toggle("active");
-      document.getElementById("overlay").classList.toggle("active");
-    }
-
-    function toggleHub() {
-      const hub = document.getElementById("hub");
-      hub.style.display = hub.style.display === "block" ? "none" : "block";
-    }
-
-    function adjustChatPadding() {
-      const form = document.getElementById("chat-form");
-      chatBox.style.paddingBottom = `${form.offsetHeight + 20}px`;
-    }
-
-    window.addEventListener("resize", adjustChatPadding);
-    adjustChatPadding();
-
-    const themeToggle = document.getElementById("theme-toggle");
-    themeToggle.addEventListener("click", () => {
-      const current = document.body.getAttribute("data-theme");
-      const newTheme = current === "dark" ? "light" : "dark";
-      document.body.setAttribute("data-theme", newTheme);
-      themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
-      localStorage.setItem("theme", newTheme);
-    });
-
-    const savedTheme = localStorage.getItem("theme");
-    document.body.setAttribute("data-theme", savedTheme || "light");
-    themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
-
+    
 <script>
   const API_BASE = "https://evosgpt.xyz";   // ✅ FIXED ROOT URL
   const chatBox = document.getElementById("chat-box");
@@ -752,6 +639,7 @@
 </script>
 </body>
 </html>
+
 
 
 
