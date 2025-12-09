@@ -560,46 +560,199 @@
     document.body.setAttribute("data-theme", savedTheme || "light");
     themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
 
-    async function showReferralPopup() {
-      try {
-        const res = await fetch("/get_referral");
-        const data = await res.json();
-        const link = data.link || "https://evosgpt.xyz/register";
+<script>
+  const API_BASE = "https://evosgpt.xyz";   // ✅ FIXED ROOT URL
+  const chatBox = document.getElementById("chat-box");
+  const textarea = document.getElementById("message");
 
-        const old = document.querySelector(".invite-popup");
-        if (old) old.remove();
+  function scrollToBottom() {
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
 
-        const popup = document.createElement("div");
-        popup.className = "invite-popup";
-        popup.innerHTML = `
-          <div class="invite-card">
-            <h2>🎁 Invite Friends</h2>
-            <p>Share your unique referral link:</p>
-            <input id="refLink" type="text" readonly value="${link}" />
-            <button class="copy-btn" onclick="copyReferral()">📋 Copy</button>
-            <button class="close-btn" onclick="closeReferral()">✖</button>
-          </div>
-        `;
-        document.body.appendChild(popup);
-      } catch (err) {
-        alert("⚠️ Could not fetch referral link. Please try again.");
+  function saveChat() {
+    localStorage.setItem("evos_chat_history", chatBox.innerHTML);
+  }
+
+  function loadChat() {
+    const saved = localStorage.getItem("evos_chat_history");
+    if (saved) {
+      chatBox.innerHTML = saved;
+      adjustChatPadding();
+      scrollToBottom();
+    }
+  }
+
+  function clearChat() {
+    localStorage.removeItem("evos_chat_history");
+    chatBox.innerHTML = "";
+  }
+
+  loadChat();
+
+  // 🚀 MAIN CHAT SUBMIT
+  document.getElementById("chat-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = textarea.value.trim();
+    if (!text) return;
+
+    // User bubble
+    chatBox.insertAdjacentHTML("beforeend",
+      `<div class="msg user">${text}</div>`
+    );
+    saveChat();
+    scrollToBottom();
+    textarea.value = "";
+    textarea.style.height = "40px";
+    adjustChatPadding();
+
+    // Typing bubble
+    const typing = document.createElement("div");
+    typing.className = "msg bot";
+    typing.id = "typing-bubble";
+    typing.innerText = "EVOSGPT is typing...";
+    chatBox.appendChild(typing);
+    scrollToBottom();
+
+    try {
+      // 🔥 FIXED: ALWAYS CALL FULL BACKEND URL
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text })
+      });
+
+      const textData = await res.text();
+
+      // 🛑 Prevent JSON errors — detect HTML response
+      if (textData.trim().startsWith("<")) {
+        throw new Error("Server returned HTML instead of JSON. (Check backend route)");
       }
-    }
 
-    function copyReferral() {
-      const input = document.getElementById("refLink");
-      input.select();
-      document.execCommand("copy");
-      alert("✅ Referral link copied!");
-    }
+      const data = JSON.parse(textData);
 
-    function closeReferral() {
-      const popup = document.querySelector(".invite-popup");
-      if (popup) popup.remove();
+      typing.remove();
+
+      let botContent = "";
+      if (data.image_url) {
+        botContent = `<img src="${data.image_url}" 
+          style="max-width:100%; border-radius:10px; margin-top:8px;">`;
+      } else if (data.image_base64) {
+        botContent =
+          `<img src="data:image/png;base64,${data.image_base64}" 
+            style="max-width:100%; border-radius:10px; margin-top:8px;">`;
+      } else {
+        botContent = marked.parse(data.reply || "⚠ No reply from server.");
+      }
+
+      chatBox.insertAdjacentHTML("beforeend", `
+        <div class="msg bot">
+          <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
+          <div class="bot-content">${botContent}</div>
+          <button class="copy-btn" onclick="copyText(this)">📋</button>
+        </div>
+      `);
+
+      saveChat();
+      adjustChatPadding();
+      scrollToBottom();
+    } catch (err) {
+      typing.remove();
+      chatBox.insertAdjacentHTML("beforeend",
+        `<div class="msg bot error">⚠ Error: ${err.message}</div>`
+      );
+      saveChat();
     }
-  </script>
+  });
+
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 768) {
+      e.preventDefault();
+      document.getElementById("chat-form").dispatchEvent(new Event("submit"));
+    }
+  });
+
+  function copyText(button) {
+    const text = button.parentElement.innerText.replace("📋", "").trim();
+    navigator.clipboard.writeText(text).then(() => {
+      button.textContent = "✅";
+      setTimeout(() => (button.textContent = "📋"), 1500);
+    });
+  }
+
+  function toggleSidebar() {
+    document.getElementById("sidebar").classList.toggle("active");
+    document.getElementById("overlay").classList.toggle("active");
+  }
+
+  function toggleHub() {
+    const hub = document.getElementById("hub");
+    hub.style.display = hub.style.display === "block" ? "none" : "block";
+  }
+
+  function adjustChatPadding() {
+    const form = document.getElementById("chat-form");
+    chatBox.style.paddingBottom = `${form.offsetHeight + 20}px`;
+  }
+
+  window.addEventListener("resize", adjustChatPadding);
+  adjustChatPadding();
+
+  // 🌗 THEME TOGGLE
+  const themeToggle = document.getElementById("theme-toggle");
+  themeToggle.addEventListener("click", () => {
+    const current = document.body.getAttribute("data-theme");
+    const newTheme = current === "dark" ? "light" : "dark";
+    document.body.setAttribute("data-theme", newTheme);
+    themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
+    localStorage.setItem("theme", newTheme);
+  });
+
+  const savedTheme = localStorage.getItem("theme");
+  document.body.setAttribute("data-theme", savedTheme || "light");
+  themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
+
+  // 🎁 REFERRAL POPUP FIXED
+  async function showReferralPopup() {
+    try {
+      const res = await fetch(`${API_BASE}/get_referral`);
+      const data = await res.json();
+      const link = data.link || "https://evosgpt.xyz/register";
+
+      const old = document.querySelector(".invite-popup");
+      if (old) old.remove();
+
+      const popup = document.createElement("div");
+      popup.className = "invite-popup";
+      popup.innerHTML = `
+        <div class="invite-card">
+          <h2>🎁 Invite Friends</h2>
+          <p>Share your unique referral link:</p>
+          <input id="refLink" type="text" readonly value="${link}" />
+          <button class="copy-btn" onclick="copyReferral()">📋 Copy</button>
+          <button class="close-btn" onclick="closeReferral()">✖</button>
+        </div>
+      `;
+      document.body.appendChild(popup);
+    } catch (err) {
+      alert("⚠️ Could not fetch referral link.");
+    }
+  }
+
+  function copyReferral() {
+    const input = document.getElementById("refLink");
+    input.select();
+    document.execCommand("copy");
+    alert("✅ Referral link copied!");
+  }
+
+  function closeReferral() {
+    const popup = document.querySelector(".invite-popup");
+    if (popup) popup.remove();
+  }
+</script>
 </body>
 </html>
+
 
 
 
