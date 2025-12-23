@@ -2863,11 +2863,6 @@ def db_check():
 def system_notices():
     return "No system notices yet."
 
-@app.route('/favicon.ico')
-def favicon():
-    return '', 204  # no content, prevents errors
-
-
 
 # ---------- QUICK FIX: Replace SQLite placeholders with Postgres placeholders ----------
 import re
@@ -2948,6 +2943,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
