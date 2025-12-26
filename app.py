@@ -2858,7 +2858,15 @@ def db_check():
     except Exception as e:
         return {"status": "error", "msg": str(e)}
 
+from flask import send_from_directory
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(
+        'static/images',
+        'evosgpt-icon.png'
+        )
+        
 @app.route('/system_notices')
 def system_notices():
     return "No system notices yet."
@@ -2943,6 +2951,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
