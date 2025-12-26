@@ -8,7 +8,7 @@
     <link rel="canonical" href="https://evosgpt.xyz/">
 
     <!-- SEO -->
-    <title>EVOSGPT — Built for You, Designed to Evolve</title>
+    <title>EVOSGPT — Creating Evolution for the future</title>
     <meta name="description" content="EVOSGPT — Evoluton for the future, Smart, secure, evolving AI chat system. Built for You, Designed to Evolve." />
     <meta name="keywords" content="EVOSGPT, AI chat, evolving AI, secure AI, Africa AI, EVOS, S.O.E phone, Besah Deladem Etornam">
 
@@ -22,7 +22,7 @@
     <meta name="google" content="notranslate">
 
     <!-- Open Graph -->
-    <meta property="og:title" content="EVOSGPT — Designed to Evolve">
+    <meta property="og:title" content="EVOSGPT — Evolution for the Future>
     <meta property="og:description" content="Experience a fast, secure, and evolving AI designed for you.">
     <meta property="og:url" content="https://evosgpt.xyz/">
     <meta property="og:type" content="website">
@@ -36,7 +36,7 @@
 
     <!-- Icons -->
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/evosgpt-icon.png') }}">
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/evosgpt-icon.png') }}">
     <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
 
     <!-- Manifest -->
@@ -388,9 +388,6 @@
       <a href="/upgrade">⚡ Upgrade</a>
       <a href="javascript:void(0)" onclick="showReferralPopup()">🎁 Invite</a>
    
-      <!-- SUPPORT ADDED -->
-      <a href="mailto:evoarchitect00@gmail.com">📨 Support</a>
-
       {% if tier in ["King", "Founder"] %}
         <a href="/admin">🛠 Admin</a>
       {% endif %}
@@ -402,6 +399,13 @@
         <a href="/logout">🚪 Logout</a>
       {% endif %}
     </div>
+
+    <div class="hub-toggle" onclick="toggleHub()">📨 Support ▼</div>
+    <div class="hub-content" id="hub">
+      <a href="https://t.me/evosgpt">telegram</a>
+        <!-- SUPPORT ADDED -->
+      <a href="mailto:evoarchitect00@gmail.com">📨 mail</a>
+
     <div>
 
 
@@ -409,8 +413,7 @@
     </div>
       <a href="/about">About</a>
      <!-- FOOTER ADDED -->
-      <a href="https://t.me/evosgpt">telegram</a>
-  <footer id="sidebar-footer">
+  <footer id="site-footer">
     © 2025. All Rights Reserved. Evos Technologies.
   </footer>
   </div>
@@ -640,6 +643,7 @@
 </script>
 </body>
 </html>
+
 
 
 
