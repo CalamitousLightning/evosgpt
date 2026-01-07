@@ -94,47 +94,90 @@
     }
 
     /* Sidebar */
-    #sidebar {
-      width: 260px;
-      background: var(--sidebar-bg);
-      color: white;
-      position: fixed;
-      top: 0;
-      left: -260px;
-      height: 100%;
-      transition: 0.3s;
-      padding-top: 60px;
-      z-index: 1001;
-      display: flex;
-      flex-direction: column;
-    }
-    #sidebar a {
-      display: block;
-      padding: 12px;
-      color: white;
-      text-decoration: none;
-    }
-    #sidebar a:hover { background: var(--primary-color); }
-    #sidebar.active { left: 0; box-shadow: 2px 0 10px rgba(0,0,0,0.4); }
-
-    #overlay {
-      position: fixed; top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5);
-      display: none;
-      z-index: 1000;
-    }
-    #overlay.active { display: block; }
-
-    .hub-toggle { cursor: pointer; padding: 12px; font-weight: bold; background: #333; border-top: 1px solid #444; }
-    .hub-content { display: none; background: #2a2a2a; border-top: 1px solid #444; }
-    .hub-content a { padding-left: 24px; }
+#sidebar {
+  width: 260px;
+  background: var(--sidebar-bg);
+  color: white;
+  position: fixed;
+  top: 0;
+  left: -260px;
+  height: 100%;
+  transition: 0.3s;
+  padding-top: 60px;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
 }
-    #overlay.active { display: block; }
 
-    .support-toggle { cursor: pointer; padding: 12px; font-weight: bold; background: #333; border-top: 1px solid #444; }
-    .support-content { display: none; background: #2a2a2a; border-top: 1px solid #444; }
-    .support-content a { padding-left: 24px; }
+#sidebar a {
+  display: block;
+  padding: 12px;
+  color: white;
+  text-decoration: none;
+}
+
+#sidebar a:hover {
+  background: var(--primary-color);
+}
+
+#sidebar.active {
+  left: 0;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.4);
+}
+
+/* Overlay */
+#overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  z-index: 1000;
+}
+
+#overlay.active {
+  display: block;
+}
+
+/* HUB */
+.hub-toggle {
+  cursor: pointer;
+  padding: 12px;
+  font-weight: bold;
+  background: #333;
+  border-top: 1px solid #444;
+}
+
+.hub-content {
+  display: none;
+  background: #2a2a2a;
+  border-top: 1px solid #444;
+}
+
+.hub-content a {
+  padding-left: 24px;
+}
+
+/* SUPPORT / COMMUNITY + CONNECTIONS */
+.support-toggle {
+  cursor: pointer;
+  padding: 12px;
+  font-weight: bold;
+  background: #333;
+  border-top: 1px solid #444;
+}
+
+.support-content {
+  display: none;
+  background: #2a2a2a;
+  border-top: 1px solid #444;
+}
+
+.support-content a {
+  padding-left: 24px;
+}
 
     /* Header */
     header {
@@ -386,45 +429,63 @@
 </head>
 
 <body>
-  <div id="sidebar">  
-    <a href="javascript:void(0)" onclick="toggleSidebar()">⬅ Back</a>
-    <a href="javascript:void(0)" onclick="toggleSidebar()">💬 Chat</a>     
-    <div class="hub-toggle" onclick="toggleHub()">🌐 Hub ▼</div>
-    <div class="hub-content" id="hub">
-      <a href="/upgrade">⚡ Upgrade</a>
-      <a href="javascript:void(0)" onclick="showReferralPopup()">🎁 Invite</a>
-   
-      {% if tier in ["King", "Founder"] %}
-        <a href="/admin">🛠 Admin</a>
-      {% endif %}
-      <a href="javascript:void(0)" onclick="clearChat()">🧹 Clear Chat</a>
-      {% if not logged_in %}
-        <a href="/login">🔑 Login</a>
-        <a href="/register">📝 Register</a>
-      {% else %}
-        <a href="/logout">🚪 Logout</a>
-      {% endif %}
 
-        <a href="https://t.me/evosgpt">telegram</a>
-        <!-- SUPPORT ADDED -->
-      <a href="mailto:evoarchitect00@gmail.com">📨 mail</a>
+<div id="sidebar">  
 
-<a href="/about">About</a>
-     <!-- FOOTER ADDED -->
+  <a href="javascript:void(0)" onclick="toggleSidebar()">⬅ Back</a>
+  <a href="javascript:void(0)" onclick="toggleSidebar()">💬 Chat</a>
 
-<footer id="site-footer">
+  <!-- HUB -->
+  <div class="hub-toggle" onclick="toggleHub()">🌐 Hub ▼</div>
+  <div class="hub-content" id="hub">
+
+    <a href="/upgrade">⚡ Upgrade</a>
+    <a href="javascript:void(0)" onclick="showReferralPopup()">🎁 Invite</a>
+
+    {% if tier in ["King", "Founder"] %}
+      <a href="/admin">🛠 Admin</a>
+    {% endif %}
+
+    <a href="javascript:void(0)" onclick="clearChat()">🧹 Clear Chat</a>
+
+    {% if not logged_in %}
+      <a href="/login">🔑 Login</a>
+      <a href="/register">📝 Register</a>
+    {% else %}
+      <a href="/logout">🚪 Logout</a>
+    {% endif %}
+  </div>
+
+
+  <!-- COMMUNITY -->
+  <div class="support-toggle" onclick="toggleSupport()">🧩 Community ▼</div>
+  <div class="support-content" id="support">
+
+    <a href="/suggestions">📝 Suggestions</a>
+    <a href="/report-bug">🐞 Report a Bug</a>
+    <!-- can add later -->
+    <!-- <a href="/roadmap">🚀 Roadmap / Early Access</a> -->
+
+  </div>
+
+
+  <!-- CONNECTIONS -->
+  <div class="support-toggle" onclick="toggleConnections()">🌍 Connections ▼</div>
+  <div class="support-content" id="connections">
+
+    <a href="mailto:evoarchitect00@gmail.com">📨 Contact</a>
+    <a href="https://t.me/evosgpt">🔗 Telegram</a>
+    <a href="/about">ℹ️ About</a>
+
+  </div>
+
+
+  <!-- FOOTER -->
+  <footer id="site-footer">
     © 2025. All Rights Reserved. Evos Technologies.
-    </footer>
+  </footer>
 
-  </div>
-  </div>
-   
-  <div id="overlay" onclick="toggleSidebar()"></div>
-
-  {% if tier not in ["King", "Founder"] %}
-    <button id="upgrade-btn" onclick="location.href='/upgrade'">⚡ Upgrade Tier</button>
-  {% endif %}
-
+</div>
   <div id="main-wrapper">
     <header>
       <span class="menu-btn" onclick="toggleSidebar()">☰</span>
@@ -643,6 +704,7 @@
 </script>
 </body>
 </html>
+
 
 
 
