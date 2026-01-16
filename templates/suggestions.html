@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Suggestions – EVOSGPT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+
+<h2>Suggestions</h2>
+
+<textarea id="suggestionText" placeholder="Share your idea..."></textarea>
+<br>
+<button onclick="submitSuggestion()">Submit</button>
+
+<script>
+function submitSuggestion() {
+  const text = document.getElementById("suggestionText").value.trim();
+  if (!text) return alert("Please type something.");
+
+  const data = {
+    type: "suggestion",
+    message: text,
+    time: new Date().toISOString()
+  };
+
+  console.log(data);
+  alert("Thank you for your suggestion!");
+}
+</script>
+
+</body>
+</html>
