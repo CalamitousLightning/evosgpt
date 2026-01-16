@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Report a Bug – EVOSGPT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+
+<h2>Report a Bug</h2>
+
+<textarea id="bugText" placeholder="Describe the issue..."></textarea>
+<br>
+<button onclick="submitBug()">Submit</button>
+
+<script>
+function submitBug() {
+  const text = document.getElementById("bugText").value.trim();
+  if (!text) return alert("Please describe the bug.");
+
+  const data = {
+    type: "bug",
+    message: text,
+    userAgent: navigator.userAgent,
+    time: new Date().toISOString()
+  };
+
+  console.log(data);
+  alert("Bug report submitted. Thank you!");
+}
+</script>
+
+</body>
+</html>
