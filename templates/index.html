@@ -511,11 +511,13 @@
     <button type="submit">Send</button>
   </form>
 
-    
+
 <script>
-  const API_BASE = "https://evosgpt.xyz";   // ✅ FIXED ROOT URL
+  const API_BASE = "https://evosgpt.xyz";
   const chatBox = document.getElementById("chat-box");
   const textarea = document.getElementById("message");
+
+  /* ---------------- CHAT CORE ---------------- */
 
   function scrollToBottom() {
     chatBox.scrollTop = chatBox.scrollHeight;
@@ -541,23 +543,22 @@
 
   loadChat();
 
-  // 🚀 MAIN CHAT SUBMIT
   document.getElementById("chat-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const text = textarea.value.trim();
     if (!text) return;
 
-    // User bubble
-    chatBox.insertAdjacentHTML("beforeend",
+    chatBox.insertAdjacentHTML(
+      "beforeend",
       `<div class="msg user">${text}</div>`
     );
+
     saveChat();
     scrollToBottom();
     textarea.value = "";
     textarea.style.height = "40px";
     adjustChatPadding();
 
-    // Typing bubble
     const typing = document.createElement("div");
     typing.className = "msg bot";
     typing.id = "typing-bubble";
@@ -566,53 +567,42 @@
     scrollToBottom();
 
     try {
-      // 🔥 FIXED: ALWAYS CALL FULL BACKEND URL
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text })
       });
 
-      const textData = await res.text();
-
-      // 🛑 Prevent JSON errors — detect HTML response
-      if (textData.trim().startsWith("<")) {
-        throw new Error("Server returned HTML instead of JSON. (Check backend route)");
+      const raw = await res.text();
+      if (raw.trim().startsWith("<")) {
+        throw new Error("Server returned HTML instead of JSON");
       }
 
-      const data = JSON.parse(textData);
-
+      const data = JSON.parse(raw);
       typing.remove();
 
-      let botContent = "";
-      if (data.image_url) {
-        botContent = `<img src="${data.image_url}" 
-          style="max-width:100%; border-radius:10px; margin-top:8px;">`;
-      } else if (data.image_base64) {
-        botContent =
-          `<img src="data:image/png;base64,${data.image_base64}" 
-            style="max-width:100%; border-radius:10px; margin-top:8px;">`;
-      } else {
-        botContent = marked.parse(data.reply || "⚠ No reply from server.");
-      }
+      let botContent = data.reply
+        ? marked.parse(data.reply)
+        : "⚠ No reply from server.";
 
-      chatBox.insertAdjacentHTML("beforeend", `
-        <div class="msg bot">
+      chatBox.insertAdjacentHTML(
+        "beforeend",
+        `<div class="msg bot">
           <strong>EVOSGPT [${data.tier || "?"}]</strong><br>
           <div class="bot-content">${botContent}</div>
           <button class="copy-btn" onclick="copyText(this)">📋</button>
-        </div>
-      `);
+        </div>`
+      );
 
       saveChat();
       adjustChatPadding();
       scrollToBottom();
     } catch (err) {
       typing.remove();
-      chatBox.insertAdjacentHTML("beforeend",
-        `<div class="msg bot error">⚠ Error: ${err.message}</div>`
+      chatBox.insertAdjacentHTML(
+        "beforeend",
+        `<div class="msg bot error">⚠ ${err.message}</div>`
       );
-      saveChat();
     }
   });
 
@@ -625,21 +615,48 @@
 
   function copyText(button) {
     const text = button.parentElement.innerText.replace("📋", "").trim();
-    navigator.clipboard.writeText(text).then(() => {
-      button.textContent = "✅";
-      setTimeout(() => (button.textContent = "📋"), 1500);
-    });
+    navigator.clipboard.writeText(text);
+    button.textContent = "✅";
+    setTimeout(() => (button.textContent = "📋"), 1200);
   }
+
+  /* ---------------- SIDEBAR ---------------- */
 
   function toggleSidebar() {
     document.getElementById("sidebar").classList.toggle("active");
     document.getElementById("overlay").classList.toggle("active");
+
+    // Close all dropdowns when sidebar closes
+    closeAllMenus();
+  }
+
+  function closeAllMenus() {
+    ["hub", "support", "connections"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = "none";
+    });
   }
 
   function toggleHub() {
+    closeAllMenus();
     const hub = document.getElementById("hub");
     hub.style.display = hub.style.display === "block" ? "none" : "block";
   }
+
+  function toggleSupport() {
+    closeAllMenus();
+    const support = document.getElementById("support");
+    support.style.display = support.style.display === "block" ? "none" : "block";
+  }
+
+  function toggleConnections() {
+    closeAllMenus();
+    const connections = document.getElementById("connections");
+    connections.style.display =
+      connections.style.display === "block" ? "none" : "block";
+  }
+
+  /* ---------------- UI ---------------- */
 
   function adjustChatPadding() {
     const form = document.getElementById("chat-form");
@@ -649,44 +666,45 @@
   window.addEventListener("resize", adjustChatPadding);
   adjustChatPadding();
 
-  // 🌗 THEME TOGGLE
+  /* ---------------- THEME ---------------- */
+
   const themeToggle = document.getElementById("theme-toggle");
+
   themeToggle.addEventListener("click", () => {
     const current = document.body.getAttribute("data-theme");
-    const newTheme = current === "dark" ? "light" : "dark";
-    document.body.setAttribute("data-theme", newTheme);
-    themeToggle.textContent = newTheme === "dark" ? "☀" : "🌙";
-    localStorage.setItem("theme", newTheme);
+    const next = current === "dark" ? "light" : "dark";
+    document.body.setAttribute("data-theme", next);
+    themeToggle.textContent = next === "dark" ? "☀" : "🌙";
+    localStorage.setItem("theme", next);
   });
 
-  const savedTheme = localStorage.getItem("theme");
-  document.body.setAttribute("data-theme", savedTheme || "light");
+  const savedTheme = localStorage.getItem("theme") || "light";
+  document.body.setAttribute("data-theme", savedTheme);
   themeToggle.textContent = savedTheme === "dark" ? "☀" : "🌙";
 
-  // 🎁 REFERRAL POPUP FIXED
+  /* ---------------- REFERRAL ---------------- */
+
   async function showReferralPopup() {
     try {
       const res = await fetch(`${API_BASE}/get_referral`);
       const data = await res.json();
-      const link = data.link || "https://evosgpt.xyz/register";
+      const link = data.link || `${API_BASE}/register`;
 
-      const old = document.querySelector(".invite-popup");
-      if (old) old.remove();
+      document.querySelector(".invite-popup")?.remove();
 
       const popup = document.createElement("div");
       popup.className = "invite-popup";
       popup.innerHTML = `
         <div class="invite-card">
           <h2>🎁 Invite Friends</h2>
-          <p>Share your unique referral link:</p>
-          <input id="refLink" type="text" readonly value="${link}" />
+          <input id="refLink" readonly value="${link}">
           <button class="copy-btn" onclick="copyReferral()">📋 Copy</button>
           <button class="close-btn" onclick="closeReferral()">✖</button>
         </div>
       `;
       document.body.appendChild(popup);
-    } catch (err) {
-      alert("⚠️ Could not fetch referral link.");
+    } catch {
+      alert("Failed to load referral link.");
     }
   }
 
@@ -694,16 +712,16 @@
     const input = document.getElementById("refLink");
     input.select();
     document.execCommand("copy");
-    alert("✅ Referral link copied!");
+    alert("Copied!");
   }
 
   function closeReferral() {
-    const popup = document.querySelector(".invite-popup");
-    if (popup) popup.remove();
+    document.querySelector(".invite-popup")?.remove();
   }
 </script>
 </body>
 </html>
+
 
 
 
