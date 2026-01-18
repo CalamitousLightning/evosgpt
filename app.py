@@ -1365,10 +1365,19 @@ def clear_memory():
 
     return redirect(url_for("index"))
 
+@app.route("/suggestions")
+def suggestions():
+    return render_template("suggestions.html")
 
+@app.route("/report-bug")
+def report_bug():
+    return render_template("bug.html")
+
+    
 @app.route("/about")
 def about():
     return render_template("about.html")
+    
 
     # ---------- BEFORE REQUEST HOOKS ----------
     @app.before_request
@@ -2951,6 +2960,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
