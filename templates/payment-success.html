@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Payment Successful • EVOSGPT</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+    }
+
+    .card {
+      background: rgba(0,0,0,0.35);
+      padding: 32px 24px;
+      border-radius: 16px;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    }
+
+    .check {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 26px;
+    }
+
+    p {
+      opacity: 0.85;
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    .btn {
+      margin-top: 22px;
+      display: inline-block;
+      padding: 12px 22px;
+      background: #00e5ff;
+      color: #000;
+      border-radius: 10px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.15s ease, opacity 0.15s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      opacity: 0.9;
+    }
+
+    .small {
+      margin-top: 14px;
+      font-size: 12px;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="check">✅</div>
+    <h1>Payment Successful</h1>
+    <p>
+      Your payment has been verified.<br>
+      EVOSGPT is upgrading your access.
+    </p>
+
+    <a href="/chat" class="btn">Continue to EVOSGPT</a>
+
+    <div class="small">
+      If your access doesn’t update immediately, give it a few seconds.
+      Contact support if it still persist after 10 minutes
+    </div>
+  </div>
+
+</body>
+</html>
