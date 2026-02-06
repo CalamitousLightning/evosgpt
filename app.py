@@ -2836,7 +2836,7 @@ def webhook_coinbase():
 
 # ---------- UPGRADE SUCCESS ----------
 # ---------- UPGRADE SUCCESS ----------
-@app.route("/upgrade_success", methods=["GET"])
+@app.route("/upgrade_success", methods=["GET", "POST"])
 def upgrade_success():
     """
     Callback page shown after a successful payment
@@ -3006,6 +3006,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
