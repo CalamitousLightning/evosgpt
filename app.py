@@ -2835,21 +2835,25 @@ def webhook_coinbase():
 
 
 # ---------- UPGRADE SUCCESS ----------
-@app.route("/upgrade_success")
+# ---------- UPGRADE SUCCESS ----------
+@app.route("/upgrade_success", methods=["GET"])
 def upgrade_success():
     """
     Callback page shown after a successful payment
     from Paystack or Coinbase.
-    Auto-refreshes session tier from DB.
+    Auto-refreshes session tier from DB and displays
+    pending tier verification if available.
     """
+
     if "user_id" not in session:
         flash("⚠️ You must be logged in to view this page.")
         return redirect(url_for("login"))
 
     user_id = session["user_id"]
-    reference = request.args.get("reference", None)
+    reference = request.args.get("reference")           # Paystack / Coinbase reference
+    pending_tier = request.args.get("tier")            # optional: tier user just purchased
 
-    # Fetch the latest tier from DB
+    # Fetch the latest tier from DB to auto-refresh session
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
@@ -2861,13 +2865,20 @@ def upgrade_success():
     except Exception as e:
         print("⚠️ Upgrade session refresh failed:", e)
 
+    current_tier = session.get("tier", "Basic")
+
     if reference:
         print(f"[PAYMENT CALLBACK] Success. Reference received: {reference}")
     else:
         print("[PAYMENT CALLBACK] Success with no reference provided.")
 
-    flash("✅ Payment successful! Your access has been upgraded.")
-    return render_template("payment-success.html")
+    # Pass tiers to template
+    return render_template(
+        "payment-success.html",
+        current_tier=current_tier,
+        pending_tier=pending_tier
+    )
+
 
 @app.errorhandler(404)
 def not_found_error(e):
@@ -2995,6 +3006,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
