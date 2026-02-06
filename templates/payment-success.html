@@ -74,10 +74,10 @@
 
     <h1>Payment Successful</h1>
 
-    <p>
-      Your payment was received successfully.<br>
-      EVOSGPT is finalizing your upgrade.
-    </p>
+ <p>
+  Payment is being verified for <strong>{{ pending_tier or current_tier }}</strong> tier.<br>
+  Your current tier: <strong>{{ current_tier }}</strong>
+</p>
 
     <a href="/chat" class="btn">Continue to EVOSGPT</a>
 
