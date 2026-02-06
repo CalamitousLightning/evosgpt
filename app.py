@@ -1365,6 +1365,32 @@ def clear_memory():
 
     return redirect(url_for("index"))
 
+@app.route("/api/tier-refresh", methods=["GET"])
+def tier_refresh():
+    """
+    Return the authoritative tier for the current user session.
+    This endpoint is safe for frontend auto-refresh in sidebar.
+    """
+    tier = session.get("tier", "Basic")
+    user_id = session.get("user_id")
+    if user_id:
+        try:
+            conn = sqlite3.connect("database/memory.db")
+            c = conn.cursor()
+            c.execute("SELECT tier FROM users WHERE id = ?", (user_id,))
+            row = c.fetchone()
+            if row:
+                tier = row[0]  # DB has the latest tier
+                session["tier"] = tier  # sync session
+        except Exception as e:
+            log_suspicious("TierRefreshFail", str(e))
+        finally:
+            conn.close()
+
+    return jsonify({
+        "tier": tier
+    })
+
 @app.route("/suggestions")
 def suggestions():
     return render_template("suggestions.html")
@@ -2814,25 +2840,34 @@ def upgrade_success():
     """
     Callback page shown after a successful payment
     from Paystack or Coinbase.
+    Auto-refreshes session tier from DB.
     """
     if "user_id" not in session:
         flash("⚠️ You must be logged in to view this page.")
         return redirect(url_for("login"))
 
-    # Payment reference sent by Paystack (optional for Coinbase)
+    user_id = session["user_id"]
     reference = request.args.get("reference", None)
+
+    # Fetch the latest tier from DB
+    try:
+        conn = sqlite3.connect("database/memory.db")
+        c = conn.cursor()
+        c.execute("SELECT tier FROM users WHERE id = ?", (user_id,))
+        row = c.fetchone()
+        if row:
+            session["tier"] = row[0]  # 🔹 Auto-upgrade session
+        conn.close()
+    except Exception as e:
+        print("⚠️ Upgrade session refresh failed:", e)
 
     if reference:
         print(f"[PAYMENT CALLBACK] Success. Reference received: {reference}")
     else:
         print("[PAYMENT CALLBACK] Success with no reference provided.")
 
-    flash("✅ Payment successful! Your upgrade is being applied.")
-
-    # Always redirect user back to home/dashboard
-    return redirect(url_for("index"))
-
-
+    flash("✅ Payment successful! Your access has been upgraded.")
+    return render_template("payment-success.html")
 
 @app.errorhandler(404)
 def not_found_error(e):
@@ -2960,6 +2995,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
