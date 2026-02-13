@@ -130,7 +130,6 @@
 
   <!-- Success Toast -->
   <div id="toast" class="toast">Bug report submitted. Thank you!</div>
-  <a href="/">← Back to Chat</a>
   <script>
     const form = document.getElementById("bugForm");
     const textarea = document.getElementById("bug");
@@ -145,7 +144,7 @@
       try {
         // OPTIONAL BACKEND (enable when ready)
       
-        await fetch("/submit-bug", {
+        await fetch("/report-bug", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: text })
