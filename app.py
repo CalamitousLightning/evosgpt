@@ -1099,10 +1099,54 @@ def auto_paragraph(text: str) -> str:
     result = '\n\n'.join([p for p in out_parts if p]).strip()
     return result
 
+# ---------- TIER SYNC (Supabase) ----------
+from datetime import datetime, timezone
+
+def sync_user_tier():
+    if "user_id" not in session:
+        return
+
+    user_id = session["user_id"]
+
+    try:
+        res = supabase.table("users") \
+            .select("tier, upgrade_expiry") \
+            .eq("id", user_id) \
+            .single() \
+            .execute()
+
+        user = res.data
+        if not user:
+            return
+
+        tier = user["tier"]
+        expiry = user["upgrade_expiry"]
+
+        now = datetime.now(timezone.utc)
+
+        if expiry:
+            expiry_dt = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+
+            if now > expiry_dt:
+                # 🔻 Downgrade
+                supabase.table("users").update({
+                    "tier": "Basic",
+                    "upgrade_expiry": None
+                }).eq("id", user_id).execute()
+
+                session["tier"] = "Basic"
+                return
+
+        session["tier"] = tier
+
+    except Exception as e:
+        print("Tier sync failed:", e)
 
 # ---------- CHAT ROUTE ----------
 @app.route("/chat", methods=["POST"])
 def chat():
+    # 🔐 Ensure tier is correct (auto upgrade/downgrade)
+    sync_user_tier()
     data = request.get_json(silent=True) or {}
     user_msg = (data.get("message") or "").strip()
     ui = user_msg.lower()
@@ -3006,6 +3050,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
