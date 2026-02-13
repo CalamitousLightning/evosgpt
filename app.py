@@ -1435,13 +1435,69 @@ def tier_refresh():
         "tier": tier
     })
 
-@app.route("/suggestions")
-def suggestions():
-    return render_template("suggestions.html")
+# ---------- SUGGESTIONS + REPORT BUG ROUTES (Supabase) ----------
+from flask import request, session, jsonify, render_template
+from datetime import datetime, timezone
 
-@app.route("/report-bug")
+# ---------- SUGGESTIONS ----------
+
+@app.route("/suggestions", methods=["GET", "POST"])
+def suggestions():
+    if request.method == "GET":
+        return render_template("suggestions.html")
+
+    # POST - submit suggestion
+    try:
+        data = request.get_json(silent=True) or {}
+        message = (data.get("message") or "").strip()
+        if not message:
+            return jsonify({"error": "Suggestion cannot be empty"}), 400
+
+        user_id = session.get("user_id")
+        tier = session.get("tier", "Basic")
+
+        supabase.table("suggestions").insert({
+            "user_id": user_id,
+            "tier": tier,
+            "message": message,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+
+        return jsonify({"success": True, "message": "Suggestion submitted. Thank you!"})
+
+    except Exception as e:
+        print("Suggestion submit failed:", e)
+        return jsonify({"error": "Failed to submit suggestion"}), 500
+
+# ---------- REPORT BUG ----------
+
+@app.route("/report-bug", methods=["GET", "POST"])
 def report_bug():
-    return render_template("bug.html")
+    if request.method == "GET":
+        return render_template("bug.html")
+
+    # POST - submit bug
+    try:
+        data = request.get_json(silent=True) or {}
+        message = (data.get("message") or "").strip()
+        if not message:
+            return jsonify({"error": "Bug report cannot be empty"}), 400
+
+        user_id = session.get("user_id")
+        tier = session.get("tier", "Basic")
+
+        supabase.table("bug_reports").insert({
+            "user_id": user_id,
+            "tier": tier,
+            "message": message,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }).execute()
+
+        return jsonify({"success": True, "message": "Bug report submitted. Thank you!"})
+
+    except Exception as e:
+        print("Bug submit failed:", e)
+        return jsonify({"error": "Failed to submit bug report"}), 500
 
     
 @app.route("/about")
@@ -3050,6 +3106,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
