@@ -254,7 +254,7 @@ def init_db():
             )
         """)
 
-        # ✅ MEMORY (keep old schema for compatibility)
+        # ✅ MEMORY
         c.execute("""
             CREATE TABLE IF NOT EXISTS memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -269,7 +269,7 @@ def init_db():
             )
         """)
 
-        # ✅ LONG MEMORY (for summaries/personal context)
+        # ✅ LONG MEMORY
         c.execute("""
             CREATE TABLE IF NOT EXISTS long_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -280,7 +280,7 @@ def init_db():
             )
         """)
 
-        # ✅ GLOBAL MEMORY (shared contextual intelligence)
+        # ✅ GLOBAL MEMORY
         c.execute("""
             CREATE TABLE IF NOT EXISTS global_memory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -333,6 +333,30 @@ def init_db():
             )
         """)
 
+        # ✅ SUGGESTIONS TABLE (ADDED)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS suggestions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                tier TEXT DEFAULT 'Basic',
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        """)
+
+        # ✅ BUG REPORTS TABLE (ADDED)
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS bug_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                tier TEXT DEFAULT 'Basic',
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        """)
+
         # ✅ SEED COUPONS
         c.execute("SELECT COUNT(*) FROM coupons")
         if c.fetchone()[0] == 0:
@@ -352,7 +376,7 @@ def init_db():
         conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
         cur = conn.cursor()
 
-        # Create same tables for Postgres/Supabase
+        # USERS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -367,6 +391,8 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+        # GUESTS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS guests (
                 id SERIAL PRIMARY KEY,
@@ -374,6 +400,8 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+        # MEMORY
         cur.execute("""
             CREATE TABLE IF NOT EXISTS memory (
                 id SERIAL PRIMARY KEY,
@@ -385,6 +413,8 @@ def init_db():
                 time_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+        # LONG MEMORY
         cur.execute("""
             CREATE TABLE IF NOT EXISTS long_memory (
                 id SERIAL PRIMARY KEY,
@@ -393,6 +423,8 @@ def init_db():
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+        # GLOBAL MEMORY
         cur.execute("""
             CREATE TABLE IF NOT EXISTS global_memory (
                 id SERIAL PRIMARY KEY,
@@ -401,6 +433,8 @@ def init_db():
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+        # ACTIVITY LOG
         cur.execute("""
             CREATE TABLE IF NOT EXISTS activity_log (
                 id SERIAL PRIMARY KEY,
@@ -410,13 +444,36 @@ def init_db():
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+        # ✅ SUGGESTIONS TABLE (ADDED)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS suggestions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                tier TEXT DEFAULT 'Basic',
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # ✅ BUG REPORTS TABLE (ADDED)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS bug_reports (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                tier TEXT DEFAULT 'Basic',
+                message TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
         conn.commit()
         cur.close()
         conn.close()
         print("✅ Supabase/Postgres DB initialized (Extended Memory Enabled).")
 
 
-# ---------- SAFE ALTER (LOCAL EVOLUTION) ----------
+# ---------- SAFE ALTER ----------
 def safe_alters_sqlite(cursor):
     alters = [
         "ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'Basic'",
@@ -435,7 +492,6 @@ def safe_alters_sqlite(cursor):
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)")
     except sqlite3.OperationalError:
         pass
-
 
     try:
         cursor.execute("UPDATE users SET tier = 'Basic' WHERE tier IS NULL")
@@ -3106,6 +3162,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
