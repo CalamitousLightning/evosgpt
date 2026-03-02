@@ -45,7 +45,11 @@ try:
 except Exception as e:
     print("❌ Connection failed:", e)
 
+import secrets
+from datetime import datetime, timedelta
 
+def generate_reset_token():
+    return secrets.token_urlsafe(32)
 
 # ---------- ENVIRONMENT ----------
 from dotenv import load_dotenv
@@ -279,19 +283,19 @@ def init_db():
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         """)
-        
-# ✅ PASSWORD RESETS
-c.execute("""
-    CREATE TABLE IF NOT EXISTS password_resets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        token TEXT NOT NULL UNIQUE,
-        expires_at TIMESTAMP NOT NULL,
-        used INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(user_id) REFERENCES users(id)
-    )
-""")
+
+        # ✅ PASSWORD RESETS
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                token TEXT NOT NULL UNIQUE,
+                expires_at TIMESTAMP NOT NULL,
+                used INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+        """)
 
         # ✅ GLOBAL MEMORY
         c.execute("""
@@ -346,7 +350,7 @@ c.execute("""
             )
         """)
 
-        # ✅ SUGGESTIONS TABLE (ADDED)
+        # ✅ SUGGESTIONS TABLE
         c.execute("""
             CREATE TABLE IF NOT EXISTS suggestions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -358,7 +362,7 @@ c.execute("""
             )
         """)
 
-        # ✅ BUG REPORTS TABLE (ADDED)
+        # ✅ BUG REPORTS TABLE
         c.execute("""
             CREATE TABLE IF NOT EXISTS bug_reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -389,7 +393,7 @@ c.execute("""
         conn = psycopg2.connect(os.getenv("SUPABASE_DB_URL"))
         cur = conn.cursor()
 
-        # USERS
+        # ✅ USERS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -405,7 +409,7 @@ c.execute("""
             );
         """)
 
-        # GUESTS
+        # ✅ GUESTS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS guests (
                 id SERIAL PRIMARY KEY,
@@ -414,7 +418,7 @@ c.execute("""
             );
         """)
 
-        # MEMORY
+        # ✅ MEMORY
         cur.execute("""
             CREATE TABLE IF NOT EXISTS memory (
                 id SERIAL PRIMARY KEY,
@@ -427,7 +431,7 @@ c.execute("""
             );
         """)
 
-        # LONG MEMORY
+        # ✅ LONG MEMORY
         cur.execute("""
             CREATE TABLE IF NOT EXISTS long_memory (
                 id SERIAL PRIMARY KEY,
@@ -437,20 +441,19 @@ c.execute("""
             );
         """)
 
-#password resets
-cur.execute("""
-    CREATE TABLE IF NOT EXISTS password_resets (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id),
-        token TEXT UNIQUE NOT NULL,
-        expires_at TIMESTAMP NOT NULL,
-        used BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-""")
+        # ✅ PASSWORD RESETS
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                token TEXT UNIQUE NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
 
-
-        # GLOBAL MEMORY
+        # ✅ GLOBAL MEMORY
         cur.execute("""
             CREATE TABLE IF NOT EXISTS global_memory (
                 id SERIAL PRIMARY KEY,
@@ -460,7 +463,7 @@ cur.execute("""
             );
         """)
 
-        # ACTIVITY LOG
+        # ✅ ACTIVITY LOG
         cur.execute("""
             CREATE TABLE IF NOT EXISTS activity_log (
                 id SERIAL PRIMARY KEY,
@@ -471,7 +474,7 @@ cur.execute("""
             );
         """)
 
-        # ✅ SUGGESTIONS TABLE (ADDED)
+        # ✅ SUGGESTIONS TABLE
         cur.execute("""
             CREATE TABLE IF NOT EXISTS suggestions (
                 id SERIAL PRIMARY KEY,
@@ -482,7 +485,7 @@ cur.execute("""
             );
         """)
 
-        # ✅ BUG REPORTS TABLE (ADDED)
+        # ✅ BUG REPORTS TABLE
         cur.execute("""
             CREATE TABLE IF NOT EXISTS bug_reports (
                 id SERIAL PRIMARY KEY,
@@ -497,7 +500,6 @@ cur.execute("""
         cur.close()
         conn.close()
         print("✅ Supabase/Postgres DB initialized (Extended Memory Enabled).")
-
 
 # ---------- SAFE ALTER ----------
 def safe_alters_sqlite(cursor):
@@ -2127,13 +2129,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-import secrets
-from datetime import datetime, timedelta
-
-def generate_reset_token():
-    return secrets.token_urlsafe(32)
-from flask import request, jsonify, render_template
-
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
     if request.method == "GET":
@@ -3226,6 +3221,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
