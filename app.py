@@ -279,6 +279,19 @@ def init_db():
                 FOREIGN KEY(user_id) REFERENCES users(id)
             )
         """)
+        
+# ✅ PASSWORD RESETS
+c.execute("""
+    CREATE TABLE IF NOT EXISTS password_resets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token TEXT NOT NULL UNIQUE,
+        expires_at TIMESTAMP NOT NULL,
+        used INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+""")
 
         # ✅ GLOBAL MEMORY
         c.execute("""
@@ -423,6 +436,19 @@ def init_db():
                 last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+
+#password resets
+cur.execute("""
+    CREATE TABLE IF NOT EXISTS password_resets (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        token TEXT UNIQUE NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+""")
+
 
         # GLOBAL MEMORY
         cur.execute("""
@@ -2100,6 +2126,44 @@ def logout():
     flash("You have been logged out.")
     return redirect(url_for("login"))
 
+
+import secrets
+from datetime import datetime, timedelta
+
+def generate_reset_token():
+    return secrets.token_urlsafe(32)
+from flask import request, jsonify, render_template
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "GET":
+        return render_template("forgot_password.html")
+
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip()
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+
+    user = supabase.table("users").select("*").eq("email", email).single().execute().data
+    if not user:
+        return jsonify({"error": "No account with that email"}), 404
+
+    token = generate_reset_token()
+    expires = datetime.utcnow() + timedelta(hours=1)
+
+    supabase.table("password_resets").insert({
+        "user_id": user["id"],
+        "token": token,
+        "expires_at": expires.isoformat()
+    }).execute()
+
+    # In production, send this via email
+    reset_link = f"{request.host_url}reset-password/{token}"
+    print(f"[DEBUG] Password reset link: {reset_link}")
+
+    return jsonify({"success": True, "message": "Password reset email sent!"})
+
+
 @app.route("/get_referral")
 def get_referral():
     """Return or generate the user's referral link for evosgpt.xyz"""
@@ -3162,6 +3226,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
