@@ -129,7 +129,12 @@
     {% if msg %}
       <div class="msg {{ msg_type }}">{{ msg }}</div>
     {% endif %}
-
+    <p>
+      <br> 
+      <a href="{{ url_for('forgot_password') }}">Forgot password</a>
+      <br>
+    </p>
+    
     <p>Don’t have an account? <a href="{{ url_for('register') }}">Register</a></p>
   </div>
 
@@ -149,3 +154,4 @@
 
 </body>
 </html>
+
