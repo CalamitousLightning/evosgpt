@@ -2159,6 +2159,36 @@ def forgot_password():
     return jsonify({"success": True, "message": "Password reset email sent!"})
 
 
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    if request.method == "GET":
+        return render_template("reset_password.html", token=token)
+
+    data = request.get_json() or {}
+    new_password = (data.get("password") or "").strip()
+    if not new_password:
+        return jsonify({"error": "Password is required"}), 400
+
+    # Fetch reset record
+    reset = supabase.table("password_resets").select("*").eq("token", token).single().execute().data
+    if not reset:
+        return jsonify({"error": "Invalid token"}), 404
+
+    if reset.get("used"):
+        return jsonify({"error": "Token already used"}), 400
+
+    expires_at = datetime.fromisoformat(reset["expires_at"])
+    if datetime.utcnow() > expires_at:
+        return jsonify({"error": "Token expired"}), 400
+
+    # Update user's password
+    supabase.table("users").update({"password": new_password}).eq("id", reset["user_id"]).execute()
+
+    # Mark token as used
+    supabase.table("password_resets").update({"used": True}).eq("id", reset["id"]).execute()
+
+    return jsonify({"success": True, "message": "Password has been reset!"})
+    
 @app.route("/get_referral")
 def get_referral():
     """Return or generate the user's referral link for evosgpt.xyz"""
@@ -3221,6 +3251,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
