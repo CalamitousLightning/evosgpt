@@ -45,11 +45,7 @@ try:
 except Exception as e:
     print("❌ Connection failed:", e)
 
-import secrets
-from datetime import datetime, timedelta
 
-def generate_reset_token():
-    return secrets.token_urlsafe(32)
 
 # ---------- ENVIRONMENT ----------
 from dotenv import load_dotenv
@@ -2131,64 +2127,31 @@ def logout():
 
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
-    if request.method == "GET":
-        return render_template("forgot_password.html")
+    if request.method == "POST":
+        email = request.form.get("email")
 
-    data = request.get_json() or {}
-    email = (data.get("email") or "").strip()
-    if not email:
-        return jsonify({"error": "Email is required"}), 400
+        try:
+            supabase.auth.reset_password_for_email(
+                email,
+                options={
+                    "redirect_to": "https://evosgpt.xyz/reset-password"
+                }
+            )
 
-    user = supabase.table("users").select("*").eq("email", email).single().execute().data
-    if not user:
-        return jsonify({"error": "No account with that email"}), 404
+            flash("If that email exists, a reset link has been sent.", "success")
+            return redirect(url_for("login"))
 
-    token = generate_reset_token()
-    expires = datetime.utcnow() + timedelta(hours=1)
+        except Exception as e:
+            flash("Something went wrong. Try again.", "danger")
+            return redirect(url_for("forgot_password"))
 
-    supabase.table("password_resets").insert({
-        "user_id": user["id"],
-        "token": token,
-        "expires_at": expires.isoformat()
-    }).execute()
+    return render_template("forgot_password.html")
 
-    # In production, send this via email
-    reset_link = f"{request.host_url}reset-password/{token}"
-    print(f"[DEBUG] Password reset link: {reset_link}")
-
-    return jsonify({"success": True, "message": "Password reset email sent!"})
+@app.route("/reset-password")
+def reset_password():
+    return render_template("reset_password.html")
 
 
-@app.route("/reset-password/<token>", methods=["GET", "POST"])
-def reset_password(token):
-    if request.method == "GET":
-        return render_template("reset_password.html", token=token)
-
-    data = request.get_json() or {}
-    new_password = (data.get("password") or "").strip()
-    if not new_password:
-        return jsonify({"error": "Password is required"}), 400
-
-    # Fetch reset record
-    reset = supabase.table("password_resets").select("*").eq("token", token).single().execute().data
-    if not reset:
-        return jsonify({"error": "Invalid token"}), 404
-
-    if reset.get("used"):
-        return jsonify({"error": "Token already used"}), 400
-
-    expires_at = datetime.fromisoformat(reset["expires_at"])
-    if datetime.utcnow() > expires_at:
-        return jsonify({"error": "Token expired"}), 400
-
-    # Update user's password
-    supabase.table("users").update({"password": new_password}).eq("id", reset["user_id"]).execute()
-
-    # Mark token as used
-    supabase.table("password_resets").update({"used": True}).eq("id", reset["id"]).execute()
-
-    return jsonify({"success": True, "message": "Password has been reset!"})
-    
 @app.route("/get_referral")
 def get_referral():
     """Return or generate the user's referral link for evosgpt.xyz"""
@@ -3251,6 +3214,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
