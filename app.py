@@ -2127,25 +2127,32 @@ def logout():
 
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
-    if request.method == "POST":
-        email = request.form.get("email")
+    if request.method == "GET":
+        return render_template("forgot_password.html")
 
-        try:
-            supabase.auth.reset_password_for_email(
-                email,
-                options={
-                    "redirect_to": "https://evosgpt.xyz/reset-password"
-                }
-            )
+    # POST request (from fetch JSON)
+    data = request.get_json()
+    email = data.get("email")
 
-            flash("If that email exists, a reset link has been sent.", "success")
-            return redirect(url_for("login"))
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
 
-        except Exception as e:
-            flash("Something went wrong. Try again.", "danger")
-            return redirect(url_for("forgot_password"))
+    try:
+        supabase.auth.reset_password_for_email(
+            email,
+            options={
+                "redirect_to": "https://evosgpt.xyz/reset-password"
+            }
+        )
 
-    return render_template("forgot_password.html")
+        return jsonify({
+            "message": "If that email exists, a reset link has been sent."
+        })
+
+    except Exception:
+        return jsonify({
+            "error": "Something went wrong."
+        }), 400
 
 @app.route("/reset-password")
 def reset_password():
@@ -3214,6 +3221,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
