@@ -2149,9 +2149,11 @@ def forgot_password():
             "message": "If that email exists, a reset link has been sent."
         })
 
-    except Exception:
+    except Exception as e:
+        # This will print the exact error in your Flask logs
+        print("RESET PASSWORD ERROR:", str(e))
         return jsonify({
-            "error": "Something went wrong."
+            "error": str(e)  # <-- temporarily show the real error
         }), 400
 
 @app.route("/reset-password")
@@ -3221,6 +3223,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
