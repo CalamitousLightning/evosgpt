@@ -79,7 +79,7 @@ from flask import request, has_request_context
 
 # ---------- GLOBAL CONFIG ----------
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL", "")
 DB_MODE = os.getenv("DB_MODE", "sqlite").lower()
 
@@ -3336,6 +3336,7 @@ if __name__ == "__main__":
     init_db()
     # Do not run in debug on production. Use env var PORT or default 5000.
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)
+
 
 
 
