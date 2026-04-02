@@ -2135,143 +2135,36 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route("/forgot-password", methods=["GET", "POST"])
+@app.route("/forgot-password", methods=["POST"])
 def forgot_password():
-    if request.method == "GET":
-        # Simple HTML form
-        return """
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Forgot Password • EVOSGPT</title>
-        <style>
-        body { font-family: system-ui; background: #0f1115; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: #1a1d23; padding: 24px; border-radius: 12px; width: 100%; max-width: 400px; }
-        input, button { width: 100%; padding: 10px; margin: 10px 0; border-radius: 8px; border: none; }
-        button { background: #ff4d4d; font-weight: bold; cursor: pointer; color: #000; }
-        button:hover { opacity: 0.9; }
-        #message { color: #ff4d4d; font-weight: bold; }
-        </style>
-        </head>
-        <body>
-        <div class="card">
-            <h2>Forgot Password</h2>
-            <input type="email" id="email" placeholder="Enter your email" required>
-            <button onclick="sendReset()">Send Reset Link</button>
-            <p id="message"></p>
-            <p><a href='/login' style='color:#fff;'>Back to Login</a></p>
-        </div>
-        <script>
-        async function sendReset() {
-            const email = document.getElementById('email').value.trim();
-            const msg = document.getElementById('message');
-            msg.textContent = '';
-            if (!email) return;
-
-            try {
-                const res = await fetch('/forgot-password', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-                const data = await res.json();
-                msg.textContent = data.message || data.error;
-            } catch(e) {
-                msg.textContent = '⚠️ Something went wrong';
-            }
-        }
-        </script>
-        </body>
-        </html>
-        """
-
-    # POST via JSON
     data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid request"}), 400
-
     email = data.get("email")
+
     if not email:
         return jsonify({"error": "Email is required"}), 400
+
+    if not supabase:
+        return jsonify({"error": "Server not configured"}), 500
 
     try:
         supabase.auth.reset_password_for_email(
             email,
-            options={"redirect_to": "https://evosgpt.xyz/reset-password"}
+            options={
+                "redirect_to": "https://evosgpt.xyz/reset-password"
+            }
         )
-        return jsonify({"message": "If that email exists, a reset link has been sent."})
-    except Exception as e:
-        print("RESET PASSWORD ERROR:", e)
-        return jsonify({"error": "Something went wrong"}), 400
 
+        return jsonify({
+            "message": "Check your email for reset link."
+        })
+
+    except Exception as e:
+        print("RESET ERROR:", e)
+        return jsonify({"error": "Failed to send reset email"}), 400
     
-@app.route("/reset-password", methods=["GET", "POST"])
-def reset_password():
-    token = request.args.get("access_token", "")
-    if request.method == "GET":
-        # Simple HTML form
-        return f"""
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Reset Password • EVOSGPT</title>
-        <style>
-        body {{ font-family: system-ui; background: #0f1115; color: #fff; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
-        .card {{ background: #1a1d23; padding: 24px; border-radius: 12px; width: 100%; max-width: 400px; }}
-        input, button {{ width: 100%; padding: 10px; margin: 10px 0; border-radius: 8px; border: none; }}
-        button {{ background: #ff4d4d; font-weight: bold; cursor: pointer; color: #000; }}
-        button:hover {{ opacity: 0.9; }}
-        #message {{ color: #ff4d4d; font-weight: bold; }}
-        </style>
-        </head>
-        <body>
-        <div class="card">
-            <h2>Reset Password</h2>
-            <input type="password" id="password" placeholder="New password" required>
-            <button onclick="updatePassword()">Update Password</button>
-            <p id="message"></p>
-            <p><a href='/login' style='color:#fff;'>Back to Login</a></p>
-        </div>
-        <script>
-        async function updatePassword() {{
-            const password = document.getElementById('password').value.trim();
-            const msg = document.getElementById('message');
-            msg.textContent = '';
-            if (!password) return;
-
-            try {{
-                const res = await fetch('/reset-password?access_token={token}', {{
-                    method: 'POST',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ password }})
-                }});
-                const data = await res.json();
-                msg.textContent = data.message || data.error;
-            }} catch(e) {{
-                msg.textContent = '⚠️ Something went wrong';
-            }}
-        }}
-        </script>
-        </body>
-        </html>
-        """
-
-    # POST: update password using Supabase
-    data = request.get_json()
-    password = data.get("password")
-    if not password or not token:
-        return jsonify({"error": "Missing password or token"}), 400
-
-    try:
-        user = supabase.auth.api.update_user(token, {"password": password})
-        return jsonify({"message": "Password successfully updated! You can now login."})
-    except Exception as e:
-        print("UPDATE PASSWORD ERROR:", e)
-        return jsonify({"error": "Failed to update password"}), 400
+@app.route("/reset-password")
+def reset_password_page():
+    return render_template("reset_password.html")
 
 
 @app.route("/get_referral")
