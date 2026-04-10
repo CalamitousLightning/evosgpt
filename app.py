@@ -1,4 +1,5 @@
 ## app.py - EVOSGPT WebCore (Day33)
+
 import os
 import json
 import sqlite3
@@ -7,19 +8,25 @@ from typing import Optional
 import time
 import hmac
 import threading
-import time
 import random
 from uuid import uuid4
 import hashlib
 import re
+
 from flask import (
     Flask, render_template, request, redirect, url_for,
     session, flash, abort, jsonify, has_request_context
 )
+
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests
 
-# Optional: Coinbase Commerce python client (if installed)
+# ---------- LOAD ENV (ONLY ONCE) ----------
+from dotenv import load_dotenv
+load_dotenv()
+
+
+# ---------- OPTIONAL: COINBASE ----------
 try:
     from coinbase_commerce.client import Client as CoinbaseClient
     from coinbase_commerce.webhook import Webhook, SignatureVerificationError
@@ -27,77 +34,75 @@ try:
 except Exception:
     COINBASE_AVAILABLE = False
 
-import os
-import psycopg2
-from dotenv import load_dotenv
-
-load_dotenv()  # load your .env file
-
-url = os.getenv("SUPABASE_DB_URL")
-
-try:
-    conn = psycopg2.connect(url)
-    cur = conn.cursor()
-    cur.execute("SELECT NOW();")
-    print("✅ Connected! Current time:", cur.fetchone())
-    cur.close()
-    conn.close()
-except Exception as e:
-    print("❌ Connection failed:", e)
-
-
 
 # ---------- ENVIRONMENT ----------
-from dotenv import load_dotenv
-load_dotenv()
-
 FLASK_SECRET = os.getenv("FLASK_SECRET", "fallback_secret")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PAYSTACK_SECRET = os.getenv("PAYSTACK_SECRET")
 COINBASE_API_KEY = os.getenv("COINBASE_API_KEY")
 MTN_API_KEY = os.getenv("MTN_API_KEY")
 
+# ---------- FLASK ----------
 app = Flask(__name__)
+
 from flask_cors import CORS
-CORS(app, resources={r"/*": {"origins": "*"}}) 
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-app.secret_key = os.getenv("FLASK_SECRET", "fallback-secret")
+app.secret_key = FLASK_SECRET
 
-# Security config (set SECURE=True in prod only if HTTPS)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
-    SESSION_COOKIE_SECURE=bool(int(os.getenv("SESSION_COOKIE_SECURE", "0"))),  # 1 in prod over HTTPS
+    SESSION_COOKIE_SECURE=bool(int(os.getenv("SESSION_COOKIE_SECURE", "0"))),
     PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
 )
 
 
-# ---------- EVOSGPT DB INIT — Self-Healing + Supabase Sync Layer ----------
-import os, sqlite3, re, json, requests
-from datetime import datetime
-from flask import request, has_request_context
-
-# ---------- GLOBAL CONFIG ----------
+# ---------- SUPABASE CONFIG ----------
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
-SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL", "")
 DB_MODE = os.getenv("DB_MODE", "sqlite").lower()
 
 from supabase import create_client, Client
 
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    print("✅ Supabase client initialized")
-else:
-    supabase = None
-    print("❌ Supabase URL or Key missing")
+supabase: Optional[Client] = None
+
+def init_supabase():
+    global supabase
+
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("❌ Supabase URL or Key missing")
+        supabase = None
+        return None
+
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("✅ Supabase client initialized")
+        return supabase
+    except Exception as e:
+        print("❌ Supabase init failed:", e)
+        supabase = None
+        return None
+
+
+# Initialize ONCE
+init_supabase()
+
+
+# ---------- LOCAL DB ----------
+DB_PATH = "database/memory.db"
+
+def get_db():
+    return sqlite3.connect(DB_PATH)
 
 
 # ---------- GLOBAL LOGGER ----------
 def log_action(user_id, action, details="N/A"):
-    """Logs actions into the activity_log table (local + Supabase mirror)"""
+    """Logs actions locally + Supabase safely"""
+
+    # 🔹 LOCAL LOG (always works)
     try:
-        conn = sqlite3.connect("database/memory.db")
+        conn = get_db()
         c = conn.cursor()
         c.execute(
             "INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)",
@@ -108,29 +113,22 @@ def log_action(user_id, action, details="N/A"):
     except Exception as e:
         print(f"[LOGGER ERROR] {e}")
 
-    # Supabase mirror
-    if DB_MODE in ("supabase", "postgres") and SUPABASE_URL and SUPABASE_KEY:
+    # 🔹 SUPABASE LOG (SAFE CLIENT, not raw HTTP)
+    if supabase:
         try:
-            requests.post(
-                f"{SUPABASE_URL}/rest/v1/activity_log",
-                headers={
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                    "Content-Type": "application/json",
-                },
-                data=json.dumps({
-                    "user_id": user_id,
-                    "action": action,
-                    "details": details,
-                }),
-                timeout=5
-            )
+            supabase.table("activity_log").insert({
+                "user_id": user_id,
+                "action": action,
+                "details": details
+            }).execute()
         except Exception as e:
-            print(f"[REMOTE LOG FAIL] {e}")
+            print(f"[SUPABASE LOG ERROR] {e}")
 
 
+# ---------- SUSPICIOUS LOGGER ----------
 def log_suspicious(activity_type, details="N/A"):
     """Logs suspicious or system anomalies"""
+
     entry = {
         "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "ip": request.remote_addr if has_request_context() else "unknown",
@@ -138,13 +136,15 @@ def log_suspicious(activity_type, details="N/A"):
         "activity": activity_type,
         "details": details
     }
+
     os.makedirs("logs", exist_ok=True)
+
     try:
         with open("logs/suspicious.jsonl", "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
     except Exception as e:
         print(f"[SUSPICIOUS LOG ERROR] {e}")
-
+        
 # ---------- EVOSGPT DB INIT (Stable Hybrid Edition) ----------
 import os, sqlite3, re
 try:
