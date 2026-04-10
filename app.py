@@ -2861,19 +2861,20 @@ def _upgrade_user(user_id: int, tier: str, days: int = 30):
     conn.commit()
     conn.close()
 
+
 # --- PAYSTACK WEBHOOK ---
 @app.route("/webhook/paystack", methods=["POST"])
 def webhook_paystack():
     raw = request.get_data() or b""
     sent_sig = request.headers.get("X-Paystack-Signature", "")
-    secret = os.getenv("PAYSTACK_SECRET", "")   # ✔ your .env uses PAYSTACK_SECRET
+    secret = os.getenv("PAYSTACK_SECRET", "")
 
-    # Basic checks
+    # 🔒 Basic checks
     if not sent_sig or not secret:
-        print("⚠️ Paystack webhook missing signature or secret.")
+        print("⚠️ Missing Paystack signature or secret")
         return jsonify({"status": "invalid-signature"}), 400
 
-    # Validate signature
+    # 🔒 Validate signature
     try:
         expected = hmac.new(secret.encode("utf-8"), raw, hashlib.sha512).hexdigest()
     except Exception as e:
@@ -2881,15 +2882,16 @@ def webhook_paystack():
         return jsonify({"status": "invalid-hmac"}), 400
 
     if not compare_digest(sent_sig, expected):
-        print("⚠️ Invalid Paystack signature.")
+        print("⚠️ Invalid Paystack signature")
         return jsonify({"status": "invalid-signature"}), 400
 
-    # Parse JSON
+    # 📦 Parse payload
     payload = _safe_parse_json(raw)
     if not payload:
-        print("⚠️ Invalid Paystack JSON payload.")
+        print("⚠️ Invalid JSON payload")
         return jsonify({"status": "bad-json"}), 400
 
+    # Only process successful payments
     if payload.get("event") != "charge.success":
         return jsonify({"status": "ignored"}), 200
 
@@ -2897,7 +2899,12 @@ def webhook_paystack():
     reference = data.get("reference", "")
     meta = data.get("metadata", {}) or {}
 
-    # Extract user ID safely
+    # 🚨 Ensure reference exists
+    if not reference:
+        print("⚠️ Missing payment reference")
+        return jsonify({"status": "no-reference"}), 400
+
+    # 👤 Extract user ID (INT as you confirmed)
     try:
         user_id = int(meta.get("user_id"))
     except Exception:
@@ -2905,27 +2912,29 @@ def webhook_paystack():
 
     tier = meta.get("tier", "Core")
 
+    # 🚨 Validate metadata
     if not isinstance(user_id, int) or tier not in VALID_TIERS:
-        print("⚠️ Paystack bad metadata:", meta)
+        print("⚠️ Bad metadata:", meta)
         return jsonify({"status": "bad-metadata"}), 400
 
     # 💰 Validate amount
     try:
-        paid_amount = data.get("amount", 0) / 100   # pesewas → GHS
+        paid_amount = data.get("amount", 0) / 100  # pesewas → GHS
         expected_amount = TIER_PRICE_USD[tier] * EXCHANGE_RATES["GHS"]
     except Exception as e:
         print("⚠️ Amount validation error:", e)
         return jsonify({"status": "amount-error"}), 400
 
     if abs(paid_amount - expected_amount) > 0.5:
-        print(f"⚠️ Paystack amount mismatch: {paid_amount} vs {expected_amount}")
+        print(f"⚠️ Amount mismatch: {paid_amount} vs {expected_amount}")
         return jsonify({"status": "amount-mismatch"}), 400
 
-    # Duplicate reference check
+    # 🔁 Prevent duplicate processing
     if _purchases_ref_exists(reference):
+        print("⚠️ Duplicate transaction:", reference)
         return jsonify({"status": "ok"}), 200
 
-    # Save purchase
+    # 💾 Save purchase (local DB)
     try:
         conn = sqlite3.connect("database/memory.db")
         c = conn.cursor()
@@ -2936,15 +2945,39 @@ def webhook_paystack():
         conn.commit()
         conn.close()
     except Exception as e:
-        print("⚠️ Paystack DB error:", e)
+        print("⚠️ DB error:", e)
         return jsonify({"status": "db-error"}), 500
 
-    # Upgrade the user
-    _upgrade_user(user_id, tier)
-    print(f"✅ User {user_id} upgraded via Paystack → {tier}")
+    # 🚀 Upgrade user in Supabase
+    try:
+        if not supabase:
+            print("⚠️ Supabase not available — cannot upgrade user")
+            return jsonify({"status": "supabase-error"}), 500
 
+        # Optional: check current tier to avoid unnecessary writes
+        user = supabase.table("users").select("tier").eq("id", user_id).execute()
+
+        if user.data:
+            current_tier = user.data[0]["tier"]
+
+            if current_tier == tier:
+                print(f"⚠️ User {user_id} already on {tier}")
+            else:
+                supabase.table("users").update({
+                    "tier": tier
+                }).eq("id", user_id).execute()
+
+                print(f"🚀 User {user_id} upgraded → {tier}")
+        else:
+            print(f"⚠️ User {user_id} not found in Supabase")
+
+    except Exception as e:
+        print("❌ Supabase update failed:", e)
+        return jsonify({"status": "upgrade-failed"}), 500
+
+    print(f"✅ Payment processed: User {user_id} → {tier}")
     return jsonify({"status": "ok"}), 200
-
+    
 
 from flask import request
 
